@@ -16,9 +16,11 @@ export type ExpenseDTO = {
   amount: number;
   category: ExpenseCategory;
   paidBy: string;
+  splitEnabled: boolean;
   splitBetween: string[];
   date: string;
   notes?: string;
+  description?: string;
   billImage?: string;
 };
 
@@ -58,6 +60,13 @@ export type MonthlySummary = {
   vegetableTotal: number;
   gasTotal: number;
   miscTotal: number;
+  othersTotal: number;
+  /** Monthly wallet cap from HouseMonth; null if not configured */
+  monthBudget: number | null;
+  monthRemaining: number | null;
+  monthWalletProgress: number | null;
+  budgetAlertLevel: "none" | "warn" | "over";
+  topSpenderLabel?: string;
   categoryBreakdown: { category: ExpenseCategory; total: number; emoji: string }[];
   perUserContribution: { userId: string; name: string; paid: number }[];
   perUserShare: { userId: string; name: string; share: number }[];

@@ -30,10 +30,13 @@ import { formatInr } from "@/lib/utils";
 import type { UserDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export function UsersPageClient() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
   const qc = useQueryClient();
   const { data: users, isLoading } = useQuery({
     queryKey: queryKeys.users,
@@ -136,19 +139,21 @@ export function UsersPageClient() {
                     <CardDescription>Total paid · {formatInr(u.totalPaid)}</CardDescription>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => openEdit(u)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="rounded-xl text-destructive"
-                    onClick={() => setDeleteId(u._id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                {isAdmin ? (
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => openEdit(u)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="rounded-xl text-destructive"
+                      onClick={() => setDeleteId(u._id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : null}
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3">

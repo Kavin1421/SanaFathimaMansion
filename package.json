@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
+    "migrate:expenses-split": "tsx scripts/migrate-expenses-split.ts",
     "bot:dev": "npm run dev --prefix whatsapp-bot"
   },
   "dependencies": {

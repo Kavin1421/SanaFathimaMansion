@@ -32,22 +32,66 @@ export const updateUserSchema = createUserSchema.partial().extend({
   id: objectIdString,
 });
 
-export const expenseBaseSchema = z.object({
+const expenseFields = {
   title: z.string().min(1).max(120),
   amount: z.number().positive(),
   category: z.enum(EXPENSE_CATEGORIES),
   paidBy: objectIdString,
-  splitBetween: z.array(objectIdString).min(1),
+  splitEnabled: z.boolean().default(true),
+  splitBetween: z.array(objectIdString).default([]),
   date: z.coerce.date(),
   notes: z.string().max(2000).optional(),
+  description: z.string().max(2000).optional(),
   billImage: z.string().optional(),
-});
+};
+
+export const expenseBaseSchema = z
+  .object(expenseFields)
+  .superRefine((data, ctx) => {
+    if (data.category === "Others" && !String(data.description ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Add a description for Others",
+        path: ["description"],
+      });
+    }
+    if (data.splitEnabled && data.splitBetween.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Pick at least one person for the split",
+        path: ["splitBetween"],
+      });
+    }
+  })
+  .transform((data) => ({
+    ...data,
+    splitBetween: data.splitEnabled ? data.splitBetween : [data.paidBy],
+  }));
 
 export const createExpenseSchema = expenseBaseSchema;
 
-export const updateExpenseSchema = expenseBaseSchema.partial().extend({
-  id: objectIdString,
-});
+export const updateExpenseSchema = z
+  .object(expenseFields)
+  .partial()
+  .extend({ id: objectIdString })
+  .superRefine((data, ctx) => {
+    if (data.category === "Others" && data.description !== undefined && !String(data.description).trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Add a description for Others",
+        path: ["description"],
+      });
+    }
+    const splitOn = data.splitEnabled;
+    const splits = data.splitBetween;
+    if (splitOn === true && splits !== undefined && splits.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Pick at least one person for the split",
+        path: ["splitBetween"],
+      });
+    }
+  });
 
 export const createSettlementSchema = z.object({
   fromUser: objectIdString,

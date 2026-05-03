@@ -4,6 +4,7 @@ export const EXPENSE_CATEGORIES = [
   "Vegetables",
   "Gas",
   "Misc",
+  "Others",
 ] as const;
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
@@ -17,6 +18,7 @@ export const CATEGORY_META: Record<
   Vegetables: { emoji: "🥕", label: "Vegetables" },
   Gas: { emoji: "🔥", label: "Gas" },
   Misc: { emoji: "📦", label: "Misc" },
+  Others: { emoji: "✏️", label: "Others" },
 };
 
 export const DEFAULT_HOUSE_NAME =

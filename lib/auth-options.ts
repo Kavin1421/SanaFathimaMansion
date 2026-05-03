@@ -29,6 +29,8 @@ export const authOptions: NextAuthOptions = {
           name: acc.name,
           image: acc.image,
           onboardingCompleted: acc.onboardingCompleted,
+          role: acc.role ?? "user",
+          ledgerUserId: acc.ledgerUserId?.toString() ?? null,
         };
       },
     }),
@@ -55,6 +57,8 @@ export const authOptions: NextAuthOptions = {
         token.onboardingCompleted = Boolean(
           (user as { onboardingCompleted?: boolean }).onboardingCompleted,
         );
+        token.role = (user as { role?: "admin" | "user" }).role ?? "user";
+        token.ledgerUserId = (user as { ledgerUserId?: string | null }).ledgerUserId ?? null;
       }
 
       if (user && account?.provider === "google" && user.email) {
@@ -68,6 +72,7 @@ export const authOptions: NextAuthOptions = {
             image: user.image ?? undefined,
             googleId: account.providerAccountId,
             onboardingCompleted: false,
+            role: "user",
           });
         } else {
           if (!acc.googleId) acc.googleId = account.providerAccountId;
@@ -76,12 +81,20 @@ export const authOptions: NextAuthOptions = {
         }
         token.id = acc._id.toString();
         token.onboardingCompleted = acc.onboardingCompleted;
+        token.role = acc.role ?? "user";
+        token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
       }
 
       if (token.id) {
         await connectDb();
-        const acc = await Account.findById(token.id).select("onboardingCompleted").lean();
-        if (acc) token.onboardingCompleted = Boolean(acc.onboardingCompleted);
+        const acc = await Account.findById(token.id)
+          .select("onboardingCompleted role ledgerUserId")
+          .lean();
+        if (acc) {
+          token.onboardingCompleted = Boolean(acc.onboardingCompleted);
+          token.role = acc.role ?? "user";
+          token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
+        }
       }
 
       return token;
@@ -90,6 +103,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.onboardingCompleted = Boolean(token.onboardingCompleted);
+        session.user.role = (token.role as "admin" | "user") ?? "user";
+        session.user.ledgerUserId = (token.ledgerUserId as string | undefined) ?? null;
       }
       return session;
     },

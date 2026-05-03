@@ -19,3 +19,8 @@ export function previousMonthKey(monthKey: string): string {
   const start = parseMonthKey(monthKey);
   return monthKeyFromDate(addMonths(start, -1));
 }
+
+export function nextMonthKey(monthKey: string): string {
+  const start = parseMonthKey(monthKey);
+  return monthKeyFromDate(addMonths(start, 1));
+}

@@ -1,5 +1,7 @@
 import mongoose, { Schema, type Model, type Types } from "mongoose";
 
+export type AccountRole = "admin" | "user";
+
 export type AccountDocument = {
   _id: Types.ObjectId;
   email: string;
@@ -9,6 +11,8 @@ export type AccountDocument = {
   googleId?: string;
   emailVerified?: Date;
   onboardingCompleted: boolean;
+  role: AccountRole;
+  ledgerUserId?: Types.ObjectId;
 };
 
 const accountSchema = new Schema<AccountDocument>(
@@ -20,6 +24,8 @@ const accountSchema = new Schema<AccountDocument>(
     googleId: { type: String, sparse: true, unique: true },
     emailVerified: { type: Date },
     onboardingCompleted: { type: Boolean, default: false },
+    role: { type: String, enum: ["admin", "user"], default: "user" },
+    ledgerUserId: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
 );

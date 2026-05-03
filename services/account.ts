@@ -16,6 +16,7 @@ export async function registerAccount(input: RegisterAccountInput): Promise<{ id
     name: input.name.trim(),
     passwordHash,
     onboardingCompleted: false,
+    role: "user",
   });
   return { id: doc._id.toString() };
 }

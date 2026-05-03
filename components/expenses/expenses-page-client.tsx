@@ -30,11 +30,14 @@ import { formatInr } from "@/lib/utils";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -84,13 +87,24 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
       const r = await deleteExpenseAction(id);
       if (!r.ok) throw new Error(r.error);
     },
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: queryKeys.expenses(filters) });
+      const prev = qc.getQueryData<ExpenseDTO[]>(queryKeys.expenses(filters));
+      qc.setQueryData<ExpenseDTO[]>(queryKeys.expenses(filters), (old) =>
+        old ? old.filter((e) => e._id !== id) : [],
+      );
+      return { prev };
+    },
+    onError: (e: Error, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKeys.expenses(filters), ctx.prev);
+      toast.error(e.message);
+    },
     onSuccess: () => {
       toast.success("Expense deleted");
       qc.invalidateQueries({ queryKey: queryKeys.expenses(filters) });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
       setDeleteId(null);
     },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -101,7 +115,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
           <p className="text-sm text-muted-foreground">Filter by month, category, or payer</p>
         </div>
         <Button
-          className="rounded-xl"
+          className="hidden rounded-xl md:inline-flex"
           onClick={() => {
             setEditing(null);
             setDialogOpen(true);
@@ -114,7 +128,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
       <Card className="rounded-2xl border shadow-sm">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg">Filters</CardTitle>
-          <CardDescription>Search applies to title and notes</CardDescription>
+          <CardDescription>Search applies to title, notes, and description</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 md:flex-row md:flex-wrap">
           <Input
@@ -172,32 +186,41 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                       {CATEGORY_META[e.category as ExpenseCategory].emoji} {e.category} · Paid by{" "}
                       {userMap.get(e.paidBy) ?? "?"} · {new Date(e.date).toLocaleDateString()}
                     </p>
-                    {e.notes ? (
+                    {e.description ? (
+                      <p className="text-xs text-muted-foreground line-clamp-2">{e.description}</p>
+                    ) : e.notes ? (
                       <p className="text-xs text-muted-foreground line-clamp-2">{e.notes}</p>
+                    ) : null}
+                    {!e.splitEnabled ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">House expense (no split)</p>
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-lg font-semibold tabular-nums">{formatInr(e.amount)}</span>
                     {e.billImage ? <ImagePreviewDialog src={e.billImage} title={e.title} /> : null}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => {
-                        setEditing(e);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-xl text-destructive"
-                      onClick={() => setDeleteId(e._id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {isAdmin ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={() => {
+                            setEditing(e);
+                            setDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl text-destructive"
+                          onClick={() => setDeleteId(e._id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -216,6 +239,19 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
         }}
         expense={editing}
       />
+
+      <Button
+        type="button"
+        size="lg"
+        className="fixed bottom-5 right-4 z-40 h-14 rounded-full shadow-lg md:hidden"
+        onClick={() => {
+          setEditing(null);
+          setDialogOpen(true);
+        }}
+        aria-label="Add expense"
+      >
+        <Plus className="h-5 w-5" />
+      </Button>
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent className="rounded-2xl">

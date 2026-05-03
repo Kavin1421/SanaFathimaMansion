@@ -1,14 +1,17 @@
 "use client";
 
+import { AdminMonthPanel } from "@/components/dashboard/admin-month-panel";
 import { BalanceHero } from "@/components/dashboard/balance-hero";
 import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardRecentTable } from "@/components/dashboard/dashboard-recent-table";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { NotificationsStack } from "@/components/dashboard/notifications-stack";
+import { PersonalBalanceHint } from "@/components/dashboard/personal-balance-hint";
 import { OwesList } from "@/components/dashboard/owes-list";
 import { SpendChart } from "@/components/dashboard/spend-chart";
 import { UserBarChart } from "@/components/dashboard/user-bar-chart";
+import { WalletCard } from "@/components/dashboard/wallet-card";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { queryKeys } from "@/lib/query-keys";
@@ -56,6 +59,14 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
   return (
     <div className="grid grid-cols-12 gap-10">
       <DashboardHeader summary={s} summaryText={summaryText} monthKey={monthKey} />
+
+      <div className="col-span-12">
+        <PersonalBalanceHint summary={s} />
+      </div>
+
+      <WalletCard summary={s} />
+
+      <AdminMonthPanel monthKey={monthKey} summary={s} />
 
       <BalanceHero summary={s} />
 

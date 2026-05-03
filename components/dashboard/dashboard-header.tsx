@@ -39,17 +39,16 @@ export function DashboardHeader({ summary, summaryText, monthKey }: Props) {
         </div>
       </div>
 
-      {summary.monthlyWinner && (
+      {(summary.topSpenderLabel || summary.monthlyWinner) && (
         <div className="dashboard-surface flex items-center gap-3 rounded-2xl px-5 py-4">
           <Crown className="h-6 w-6 shrink-0 text-amber-500" />
           <div>
-            <p className="text-sm text-muted-foreground">Top contributor</p>
+            <p className="text-sm text-muted-foreground">Top spender</p>
             <p className="text-sm font-medium">
-              {summary.monthlyWinner.name}
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                · paid {formatInr(summary.monthlyWinner.totalPaid)}
-              </span>
+              {summary.topSpenderLabel ??
+                (summary.monthlyWinner
+                  ? `${summary.monthlyWinner.name} · paid ${formatInr(summary.monthlyWinner.totalPaid)}`
+                  : "")}
             </p>
           </div>
         </div>

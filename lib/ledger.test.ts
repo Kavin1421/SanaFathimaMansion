@@ -12,19 +12,30 @@ describe("expenseToNetDeltas", () => {
       amount: 1000,
       paidBy: "kevin",
       splitBetween: ["kevin", "a", "b", "c"],
+      splitEnabled: true,
     });
     expect(d.kevin).toBe(750);
     expect(d.a).toBe(-250);
     expect(d.b).toBe(-250);
     expect(d.c).toBe(-250);
   });
+
+  it("returns no deltas when split is disabled (house expense)", () => {
+    const d = expenseToNetDeltas({
+      amount: 500,
+      paidBy: "kevin",
+      splitBetween: ["kevin"],
+      splitEnabled: false,
+    });
+    expect(Object.keys(d).length).toBe(0);
+  });
 });
 
 describe("computeBalances", () => {
   it("combines expenses and settlements", () => {
     const expenses = [
-      { amount: 1000, paidBy: "k", splitBetween: ["k", "d"] },
-      { amount: 200, paidBy: "d", splitBetween: ["k", "d"] },
+      { amount: 1000, paidBy: "k", splitBetween: ["k", "d"], splitEnabled: true },
+      { amount: 200, paidBy: "d", splitBetween: ["k", "d"], splitEnabled: true },
     ];
     const settlements = [{ fromUser: "d", toUser: "k", amount: 400 }];
     const b = computeBalances(expenses, settlements);

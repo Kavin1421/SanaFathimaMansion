@@ -12,6 +12,7 @@ import {
   type LedgerSettlement,
 } from "@/lib/ledger";
 import { Expense } from "@/models/Expense";
+import { HouseMonth } from "@/models/HouseMonth";
 import { Settlement } from "@/models/Settlement";
 import { User } from "@/models/User";
 import type { DailySpendPoint, MonthlySummary, SettlementSuggestion } from "@/types";
@@ -50,16 +51,24 @@ function toLedgerExpense(e: {
   amount: number;
   paidBy: { toString(): string };
   splitBetween: { toString(): string }[];
+  splitEnabled?: boolean;
 }): LedgerExpense {
   return {
     amount: e.amount,
     paidBy: e.paidBy.toString(),
     splitBetween: e.splitBetween.map((id) => id.toString()),
+    splitEnabled: e.splitEnabled !== false,
   };
 }
 
 function ledgerThroughCutoff(
-  expenses: { date: Date; amount: number; paidBy: { toString(): string }; splitBetween: { toString(): string }[] }[],
+  expenses: {
+    date: Date;
+    amount: number;
+    paidBy: { toString(): string };
+    splitBetween: { toString(): string }[];
+    splitEnabled?: boolean;
+  }[],
   settlements: {
     date: Date;
     status: string;
@@ -121,6 +130,20 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
   const miscTotal = roundMoney(
     monthExpenses.filter((e) => e.category === "Misc").reduce((s, e) => s + e.amount, 0),
   );
+  const othersTotal = roundMoney(
+    monthExpenses.filter((e) => e.category === "Others").reduce((s, e) => s + e.amount, 0),
+  );
+
+  const houseMonthRow = await HouseMonth.findOne({ monthKey }).lean();
+  const monthBudget = houseMonthRow != null ? houseMonthRow.budget : null;
+  const monthRemaining = monthBudget != null ? roundMoney(monthBudget - totalSpent) : null;
+  const monthWalletProgress =
+    monthBudget != null && monthBudget > 0 ? Math.min(1, totalSpent / monthBudget) : null;
+  let budgetAlertLevel: "none" | "warn" | "over" = "none";
+  if (monthBudget != null && monthBudget > 0) {
+    if (totalSpent >= monthBudget) budgetAlertLevel = "over";
+    else if (totalSpent / monthBudget >= 0.8) budgetAlertLevel = "warn";
+  }
 
   const categoryTotals: Record<ExpenseCategory, number> = {
     Rent: 0,
@@ -128,6 +151,7 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
     Vegetables: 0,
     Gas: 0,
     Misc: 0,
+    Others: 0,
   };
   for (const e of monthExpenses) {
     categoryTotals[e.category] += e.amount;
@@ -150,7 +174,10 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
 
   const shareByUser: Record<string, number> = {};
   for (const e of monthExpenses) {
-    const share = e.amount / e.splitBetween.length;
+    if (e.splitEnabled === false) continue;
+    const n = e.splitBetween.length;
+    if (n < 1) continue;
+    const share = e.amount / n;
     for (const id of e.splitBetween) {
       const sid = id.toString();
       shareByUser[sid] = (shareByUser[sid] ?? 0) + share;
@@ -187,6 +214,9 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
           totalPaid: roundMoney(winnerEntries[0][1]),
         }
       : undefined;
+  const topSpenderLabel = monthlyWinner
+    ? `${monthlyWinner.name} spent the most this month`
+    : undefined;
 
   const { ledgerExpenses, ledgerSettlements } = ledgerThroughCutoff(
     allExpenses,
@@ -218,9 +248,11 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
       amount: e.amount,
       category: e.category,
       paidBy: e.paidBy.toString(),
+      splitEnabled: e.splitEnabled !== false,
       splitBetween: e.splitBetween.map((id) => id.toString()),
       date: e.date.toISOString(),
       notes: e.notes,
+      description: e.description,
       billImage: e.billImage,
     }));
 
@@ -245,6 +277,12 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
     vegetableTotal,
     gasTotal,
     miscTotal,
+    othersTotal,
+    monthBudget,
+    monthRemaining,
+    monthWalletProgress,
+    budgetAlertLevel,
+    topSpenderLabel,
     categoryBreakdown,
     perUserContribution,
     perUserShare,

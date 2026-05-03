@@ -9,6 +9,7 @@ import {
   type CreateExpenseInput,
   type UpdateExpenseInput,
 } from "@/lib/validation";
+import { isAdminSession } from "@/lib/admin";
 import { notifyWhatsAppExpense } from "@/lib/whatsapp-notify";
 import { createExpense, deleteExpense, updateExpense } from "@/services/expenses";
 import type { ActionResult } from "./users";
@@ -44,8 +45,12 @@ export async function createExpenseAction(
 export async function updateExpenseAction(
   input: UpdateExpenseInput,
 ): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof updateExpense>>>>> {
-  if (!(await requireUserSession())) {
+  const session = await requireUserSession();
+  if (!session) {
     return { ok: false, error: "Unauthorized" };
+  }
+  if (!isAdminSession(session)) {
+    return { ok: false, error: "Only an admin can edit expenses" };
   }
   const parsed = updateExpenseSchema.safeParse(input);
   if (!parsed.success) {
@@ -60,13 +65,18 @@ export async function updateExpenseAction(
     return { ok: true, data };
   } catch (e) {
     console.error(e);
-    return { ok: false, error: "Could not update expense" };
+    const msg = e instanceof Error ? e.message : "Could not update expense";
+    return { ok: false, error: msg };
   }
 }
 
 export async function deleteExpenseAction(id: string): Promise<ActionResult<null>> {
-  if (!(await requireUserSession())) {
+  const session = await requireUserSession();
+  if (!session) {
     return { ok: false, error: "Unauthorized" };
+  }
+  if (!isAdminSession(session)) {
+    return { ok: false, error: "Only an admin can delete expenses" };
   }
   try {
     const ok = await deleteExpense(id);

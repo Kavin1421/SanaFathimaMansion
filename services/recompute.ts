@@ -13,11 +13,13 @@ function toLedgerExpense(doc: {
   amount: number;
   paidBy: { toString(): string };
   splitBetween: { toString(): string }[];
+  splitEnabled?: boolean;
 }): LedgerExpense {
   return {
     amount: doc.amount,
     paidBy: doc.paidBy.toString(),
     splitBetween: doc.splitBetween.map((id) => id.toString()),
+    splitEnabled: doc.splitEnabled !== false,
   };
 }
 
@@ -34,6 +36,7 @@ export async function recomputeAllUserBalances(): Promise<void> {
       amount: e.amount,
       paidBy: e.paidBy,
       splitBetween: e.splitBetween,
+      splitEnabled: e.splitEnabled,
     }),
   );
 

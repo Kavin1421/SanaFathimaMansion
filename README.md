@@ -14,7 +14,8 @@ A **single-household** shared expense app: track who paid, split fairly, see bal
 
 | Area | Notes |
 |------|--------|
-| **Auth** | `Account` collection (email/password or Google). Ledger `User` records are roommates for splits — separate from login. |
+| **Auth** | `Account` collection (email/password or Google) with `role: "admin" \| "user"` and optional `ledgerUserId` linking the signed-in person to a ledger `User`. Ledger `User` records are roommates for splits — separate from login. |
+| **Monthly wallet** | `HouseMonth` per `YYYY-MM` holds admin-set `budget` and `carryForwardBalances`. Expenses still live in `Expense`; totals are derived by month. |
 | **Routes** | `/` marketing · `/login`, `/signup` auth · `/dashboard`, `/expenses`, `/users`, `/reports`, `/onboarding` behind middleware + session. |
 | **House name** | `HouseSettings` in DB (and env fallback). Set during onboarding. |
 | **APIs** | REST handlers under `app/api/*`; mutations also use server actions where applicable. |
@@ -33,15 +34,25 @@ A **single-household** shared expense app: track who paid, split fairly, see bal
    - `MONGO_URL`
    - `NEXTAUTH_SECRET` and `NEXTAUTH_URL`
 
-3. **Seed demo data** (ledger users, expenses, demo login account):
+3. **Seed** — interactive in a terminal (`1` = full demo reset + sample data, `2` = super-admin account only, no deletes). Or skip the menu:
 
    ```bash
-   npm run seed
+   npm run seed              # prompt when TTY; CI defaults to full
+   npm run seed -- full      # wipe + full demo (same as option 1)
+   npm run seed -- admin     # upsert super admin only (same as option 2)
    ```
 
-   Demo auth (after seed): see comments in `.env.example`.
+   After a **full** seed: demo login and super admin — see `.env.example`. Super admin email defaults to `kavinkumar24@gmail.com` unless `SUPER_ADMIN_EMAIL` is set; password from `SEED_ADMIN_PASSWORD` (default `Admin12345!` in `scripts/seed.ts`).
 
-4. **Run**
+4. **Existing databases** — after pulling changes, run once to backfill `splitEnabled` on old expenses:
+
+   ```bash
+   npm run migrate:expenses-split
+   ```
+
+   Set `NEXT_PUBLIC_APP_URL` (e.g. `https://your-domain.com`) so WhatsApp notifications can include deep links to `/expenses?month=YYYY-MM`.
+
+5. **Run**
 
    ```bash
    npm run dev
@@ -49,7 +60,7 @@ A **single-household** shared expense app: track who paid, split fairly, see bal
 
    Open [http://localhost:3000](http://localhost:3000).
 
-5. **Quality**
+6. **Quality**
 
    ```bash
    npm run lint
@@ -66,7 +77,7 @@ The main app does **not** talk to WhatsApp directly. It can POST to a companion 
 - **Enabled only when** the value (trimmed) matches **`1`**, **`true`**, **`yes`**, or **`on`** (case-insensitive).
 - Values like `false`, `0`, or random text are treated as **off** (regex does not match → `false`).
 
-When enabled, `WHATSAPP_BOT_URL` and `WHATSAPP_BOT_API_KEY` must also be set or notification posts are skipped. Expense and settlement flows call `notifyWhatsAppExpense` / `notifyWhatsAppSettlementRecorded` after successful writes.
+When enabled, `WHATSAPP_BOT_URL` and `WHATSAPP_BOT_API_KEY` must also be set or notification posts are skipped. Expense and settlement flows call `notifyWhatsAppExpense` / `notifyWhatsAppSettlementRecorded` after successful writes. Expense alerts can include wallet remaining, split vs house-expense lines, and a detail URL when `NEXT_PUBLIC_APP_URL` is set; month reset uses `notifyWhatsAppMonthReset`.
 
 See `whatsapp-bot/` for QR login, group id, and bot env.
 
@@ -81,6 +92,12 @@ See `whatsapp-bot/` for QR login, group id, and bot env.
 - `models/` — Mongoose schemas
 - `services/` — domain logic
 - `scripts/seed.ts` — local demo data + demo `Account`
+
+## Product notes (household finance)
+
+- **House expense** (`splitEnabled: false`): counts toward the monthly wallet total but does **not** change ledger user balances (no IOU movement).
+- **Admin-only** (MVP): edit/delete any expense, edit/delete ledger users, set monthly budget, start new month (WhatsApp reset), balance override. Any authenticated user can still **create** expenses and **add** roommates for onboarding.
+- **Balance override**: direct `User.balance` changes may be overwritten the next time balances are recomputed from expenses; treat as a temporary adjustment unless you add durable override bookkeeping.
 
 ## License
 

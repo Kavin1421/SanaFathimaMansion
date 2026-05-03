@@ -2,6 +2,8 @@ export type LedgerExpense = {
   amount: number;
   paidBy: string;
   splitBetween: string[];
+  /** When false, expense counts toward wallet only — no per-user IOU deltas. */
+  splitEnabled: boolean;
 };
 
 export type LedgerSettlement = {
@@ -12,6 +14,9 @@ export type LedgerSettlement = {
 
 /** Per-expense net deltas: positive = owed to that person, negative = they owe. */
 export function expenseToNetDeltas(expense: LedgerExpense): Record<string, number> {
+  if (expense.splitEnabled === false) {
+    return {};
+  }
   const { amount, paidBy, splitBetween } = expense;
   const n = splitBetween.length;
   if (n < 1 || amount <= 0) {

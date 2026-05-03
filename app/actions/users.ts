@@ -9,6 +9,7 @@ import {
   type CreateUserInput,
   type UpdateUserInput,
 } from "@/lib/validation";
+import { isAdminSession } from "@/lib/admin";
 import { createUser, deleteUser, updateUser } from "@/services/users";
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -40,8 +41,12 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionRe
 }
 
 export async function updateUserAction(input: UpdateUserInput): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof updateUser>>>>> {
-  if (!(await requireUserSession())) {
+  const session = await requireUserSession();
+  if (!session) {
     return { ok: false, error: "Unauthorized" };
+  }
+  if (!isAdminSession(session)) {
+    return { ok: false, error: "Only an admin can edit roommates" };
   }
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success) {
@@ -61,8 +66,12 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionRe
 }
 
 export async function deleteUserAction(id: string): Promise<ActionResult<null>> {
-  if (!(await requireUserSession())) {
+  const session = await requireUserSession();
+  if (!session) {
     return { ok: false, error: "Unauthorized" };
+  }
+  if (!isAdminSession(session)) {
+    return { ok: false, error: "Only an admin can remove roommates" };
   }
   try {
     const res = await deleteUser(id);

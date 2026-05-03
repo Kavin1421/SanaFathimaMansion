@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 import { requireAuthSession } from "@/lib/api-auth";
+import { configureCloudinaryFromEnv } from "@/lib/cloudinary-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,18 +11,11 @@ export async function POST(req: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-  if (!cloudName || !apiKey || !apiSecret) {
-    return NextResponse.json(
-      { error: "Cloudinary is not configured (CLOUDINARY_* env vars)" },
-      { status: 501 },
-    );
+  const configured = configureCloudinaryFromEnv();
+  if (!configured.ok) {
+    return NextResponse.json({ error: configured.message }, { status: configured.status });
   }
-
-  cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
 
   try {
     const form = await req.formData();
@@ -42,6 +36,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ url: uploaded.secure_url, publicId: uploaded.public_id });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "";
+    const httpCode = (e as { http_code?: number }).http_code;
+    const invalidCloud = /invalid cloud_name/i.test(msg) || httpCode === 401;
+    const hint = invalidCloud
+      ? " Check CLOUDINARY_URL or CLOUDINARY_CLOUD_NAME matches the Cloudinary dashboard (cloud name is usually lowercase)."
+      : "";
+    return NextResponse.json({ error: `Upload failed.${hint}` }, { status: 500 });
   }
 }

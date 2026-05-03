@@ -1,15 +1,33 @@
 import type { Request, Response, Router } from "express";
 import { Router as createRouter } from "express";
 import { z } from "zod";
-import { sendBillImage, sendExpenseMessage, sendWalletMessage } from "../senders.js";
+import {
+  sendBillImage,
+  sendExpenseMessage,
+  sendMonthResetMessage,
+  sendWalletMessage,
+} from "../senders.js";
 import { getTargetChat, isClientReady, waitUntilReady } from "../whatsapp.js";
 
 const expenseBody = z.object({
   type: z.literal("expense"),
-  name: z.string().min(1),
+  appName: z.string().min(1),
+  title: z.string().min(1),
+  payerName: z.string().min(1),
   amount: z.union([z.number(), z.string()]),
-  category: z.string().min(1),
-  splitCount: z.number().int().positive(),
+  categoryEmoji: z.string().min(1),
+  categoryLabel: z.string().min(1),
+  dateLine: z.string().min(1),
+  isSplit: z.boolean(),
+  splitCount: z.number().int().nonnegative(),
+  splitShareAmount: z.number().nullable().optional(),
+  walletRemaining: z.number().nullable(),
+  budget: z.number().nullable(),
+  budgetUsagePercent: z.number().nullable(),
+  detailUrl: z.string().url().optional(),
+  hasBill: z.boolean().optional(),
+  variant: z.enum(["created", "updated", "settlement"]).optional(),
+  settlementToName: z.string().optional(),
 });
 
 const walletBody = z.object({
@@ -24,7 +42,22 @@ const billBody = z.object({
   caption: z.string().min(1),
 });
 
-const bodySchema = z.discriminatedUnion("type", [expenseBody, walletBody, billBody]);
+const monthResetBody = z.object({
+  type: z.literal("month_reset"),
+  appName: z.string().min(1),
+  monthKey: z.string().min(1),
+  monthLabel: z.string().min(1),
+  budget: z.union([z.number(), z.string()]),
+  detailUrl: z.string().url().optional(),
+  carryForwardBalances: z.boolean().optional(),
+});
+
+const bodySchema = z.discriminatedUnion("type", [
+  expenseBody,
+  walletBody,
+  billBody,
+  monthResetBody,
+]);
 
 function requireBotKey(req: Request, res: Response): boolean {
   const expected = process.env.WHATSAPP_BOT_API_KEY?.trim();
@@ -74,6 +107,8 @@ export function sendMessageRouter(): Router {
         await sendExpenseMessage(chat, payload);
       } else if (payload.type === "wallet") {
         await sendWalletMessage(chat, payload);
+      } else if (payload.type === "month_reset") {
+        await sendMonthResetMessage(chat, payload);
       } else {
         await sendBillImage(chat, payload);
       }

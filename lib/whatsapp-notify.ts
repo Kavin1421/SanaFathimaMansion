@@ -1,7 +1,12 @@
 import { CATEGORY_META, type ExpenseCategory } from "@/lib/constants";
+import { monthKeyFromDate } from "@/lib/dates";
 import { connectDb } from "@/lib/db";
+import { getHouseDisplayName } from "@/lib/house-name";
+import { roundMoney } from "@/lib/ledger";
 import { User } from "@/models/User";
+import { getMonthWalletSnapshot } from "@/services/house-month";
 import type { ExpenseDTO } from "@/types";
+import { format, parse } from "date-fns";
 
 /** Server-only. Set `IS_WHATSAPP_BOT_ENABLED=true` (or `1`, `yes`, `on`) to send; unset/false disables all bot calls. */
 export function isWhatsAppBotEnabled(): boolean {
@@ -18,6 +23,12 @@ function baseUrl(): string | null {
 function apiKey(): string | null {
   const k = process.env.WHATSAPP_BOT_API_KEY?.trim();
   return k || null;
+}
+
+function appDetailUrl(monthKey: string): string | null {
+  const base = process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/$/, "");
+  if (!base) return null;
+  return `${base}/expenses?month=${encodeURIComponent(monthKey)}`;
 }
 
 async function post(body: Record<string, unknown>): Promise<void> {
@@ -56,29 +67,58 @@ export function notifyWhatsAppExpense(
   if (!isWhatsAppBotEnabled()) return;
   void (async () => {
     await connectDb();
+    const appName = await getHouseDisplayName();
     const payer = await User.findById(dto.paidBy).lean();
     const payerName = payer?.name ?? "Someone";
-    const meta = CATEGORY_META[dto.category as ExpenseCategory];
-    const categoryLabel = meta ? `${meta.emoji} ${dto.category}` : dto.category;
-    const categoryOut = mode === "updated" ? `✏️ ${categoryLabel}` : categoryLabel;
+    const cat = dto.category as ExpenseCategory;
+    const meta = CATEGORY_META[cat];
+    const categoryEmoji = meta?.emoji ?? "💸";
+    const categoryLabel = dto.category;
+
+    const expenseDate = new Date(dto.date);
+    const monthKey = monthKeyFromDate(expenseDate);
+    const { remaining, budget, totalSpent } = await getMonthWalletSnapshot(monthKey);
+    const dateLine = format(expenseDate, "d MMM yyyy");
+
+    const budgetUsagePercent =
+      budget != null && budget > 0
+        ? Math.round((totalSpent / budget) * 100)
+        : null;
+
+    const isSplit = dto.splitEnabled !== false;
+    const n = dto.splitBetween.length;
+    const sharePer =
+      isSplit && n > 1 ? roundMoney(dto.amount / n) : null;
+
+    const detailUrl = appDetailUrl(monthKey);
 
     await post({
       type: "expense",
-      name: payerName,
+      appName,
+      title: dto.title,
+      payerName,
       amount: dto.amount,
-      category: categoryOut,
-      splitCount: dto.splitBetween.length,
+      categoryEmoji,
+      categoryLabel,
+      dateLine,
+      isSplit,
+      splitCount: n,
+      splitShareAmount: sharePer ?? undefined,
+      walletRemaining: remaining,
+      budget,
+      budgetUsagePercent,
+      detailUrl: detailUrl ?? undefined,
+      hasBill: Boolean(dto.billImage),
+      variant: mode === "updated" ? "updated" : "created",
     });
 
     if (dto.billImage) {
-      const caption = [dto.title, `${payerName} · ₹${dto.amount} · ${categoryLabel}`, dto.notes]
-        .filter(Boolean)
-        .join("\n")
-        .slice(0, 900);
+      const amt = dto.amount.toLocaleString("en-IN");
+      const caption = `🧾 *Receipt · ${dto.title}*\n*₹${amt}* · ${payerName}`.slice(0, 900);
       await post({
         type: "bill",
         imageUrl: dto.billImage,
-        caption: caption || "Bill",
+        caption,
       });
     }
   })();
@@ -93,16 +133,54 @@ export function notifyWhatsAppSettlementRecorded(
   if (!isWhatsAppBotEnabled()) return;
   void (async () => {
     await connectDb();
+    const appName = await getHouseDisplayName();
     const [from, to] = await Promise.all([
       User.findById(fromUserId).lean(),
       User.findById(toUserId).lean(),
     ]);
+    const monthKey = monthKeyFromDate(new Date());
+    const detailUrl = appDetailUrl(monthKey);
     await post({
       type: "expense",
-      name: from?.name ?? "?",
+      appName,
+      title: "Settlement",
+      payerName: from?.name ?? "?",
       amount,
-      category: `💸 Settlement paid to ${to?.name ?? "?"}`,
+      categoryEmoji: "💸",
+      categoryLabel: "Settlement",
+      dateLine: format(new Date(), "d MMM yyyy"),
+      isSplit: false,
       splitCount: 1,
+      walletRemaining: null,
+      budget: null,
+      budgetUsagePercent: null,
+      detailUrl: detailUrl ?? undefined,
+      variant: "settlement",
+      settlementToName: to?.name ?? "?",
+    });
+  })();
+}
+
+export function notifyWhatsAppMonthReset(
+  monthKey: string,
+  budget: number,
+  options?: { carryForwardBalances?: boolean },
+): void {
+  if (!isWhatsAppBotEnabled()) return;
+  void (async () => {
+    await connectDb();
+    const appName = await getHouseDisplayName();
+    const detailUrl = appDetailUrl(monthKey);
+    const monthStart = parse(`${monthKey}-01`, "yyyy-MM-dd", new Date());
+    const monthLabel = format(monthStart, "MMMM yyyy");
+    await post({
+      type: "month_reset",
+      appName,
+      monthKey,
+      monthLabel,
+      budget,
+      detailUrl: detailUrl ?? undefined,
+      carryForwardBalances: options?.carryForwardBalances,
     });
   })();
 }
