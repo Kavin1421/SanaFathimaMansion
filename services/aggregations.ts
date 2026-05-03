@@ -1,0 +1,262 @@
+import { eachDayOfInterval, format, subDays } from "date-fns";
+import { CATEGORY_META, type ExpenseCategory } from "@/lib/constants";
+import { connectDb } from "@/lib/db";
+import { monthRange, previousMonthKey } from "@/lib/dates";
+import {
+  computeBalances,
+  computeTotalPaidByUser,
+  pendingImbalanceMagnitude,
+  roundMoney,
+  simplifyDebts,
+  type LedgerExpense,
+  type LedgerSettlement,
+} from "@/lib/ledger";
+import { Expense } from "@/models/Expense";
+import { Settlement } from "@/models/Settlement";
+import { User } from "@/models/User";
+import type { DailySpendPoint, MonthlySummary, SettlementSuggestion } from "@/types";
+
+function buildDailySpendSeries(
+  monthExpenses: { date: Date; amount: number }[],
+  prevMonthExpenses: { date: Date; amount: number }[],
+  rangeStart: Date,
+  rangeEndExclusive: Date,
+): DailySpendPoint[] {
+  const lastDay = subDays(rangeEndExclusive, 1);
+  const days = eachDayOfInterval({ start: rangeStart, end: lastDay });
+  const amountByKey = new Map<string, number>();
+  for (const e of monthExpenses) {
+    const k = format(e.date, "yyyy-MM-dd");
+    amountByKey.set(k, roundMoney((amountByKey.get(k) ?? 0) + e.amount));
+  }
+  let cum = 0;
+  const out: DailySpendPoint[] = [];
+  for (const day of days) {
+    const key = format(day, "yyyy-MM-dd");
+    const amount = roundMoney(amountByKey.get(key) ?? 0);
+    cum = roundMoney(cum + amount);
+    const dom = day.getDate();
+    const priorCumulative = roundMoney(
+      prevMonthExpenses
+        .filter((e) => e.date.getDate() <= dom)
+        .reduce((s, e) => s + e.amount, 0),
+    );
+    out.push({ date: key, amount, cumulative: cum, priorMonthCumulative: priorCumulative });
+  }
+  return out;
+}
+
+function toLedgerExpense(e: {
+  amount: number;
+  paidBy: { toString(): string };
+  splitBetween: { toString(): string }[];
+}): LedgerExpense {
+  return {
+    amount: e.amount,
+    paidBy: e.paidBy.toString(),
+    splitBetween: e.splitBetween.map((id) => id.toString()),
+  };
+}
+
+function ledgerThroughCutoff(
+  expenses: { date: Date; amount: number; paidBy: { toString(): string }; splitBetween: { toString(): string }[] }[],
+  settlements: {
+    date: Date;
+    status: string;
+    fromUser: { toString(): string };
+    toUser: { toString(): string };
+    amount: number;
+  }[],
+  cutoff: Date,
+): { ledgerExpenses: LedgerExpense[]; ledgerSettlements: LedgerSettlement[] } {
+  const ledgerExpenses: LedgerExpense[] = [];
+  for (const e of expenses) {
+    if (e.date < cutoff) {
+      ledgerExpenses.push(toLedgerExpense(e));
+    }
+  }
+  const ledgerSettlements: LedgerSettlement[] = [];
+  for (const s of settlements) {
+    if (s.status === "completed" && s.date < cutoff) {
+      ledgerSettlements.push({
+        fromUser: s.fromUser.toString(),
+        toUser: s.toUser.toString(),
+        amount: s.amount,
+      });
+    }
+  }
+  return { ledgerExpenses, ledgerSettlements };
+}
+
+export async function getMonthlySummary(monthKey: string): Promise<MonthlySummary> {
+  await connectDb();
+  const { start, end } = monthRange(monthKey);
+  const prevKey = previousMonthKey(monthKey);
+  const { start: prevStart, end: prevEnd } = monthRange(prevKey);
+
+  const [users, allExpenses, allSettlements] = await Promise.all([
+    User.find().sort({ name: 1 }).lean(),
+    Expense.find().lean(),
+    Settlement.find().lean(),
+  ]);
+
+  const userMap = new Map(users.map((u) => [u._id.toString(), u.name]));
+
+  const monthExpenses = allExpenses.filter((e) => e.date >= start && e.date < end);
+  const prevMonthExpenses = allExpenses.filter((e) => e.date >= prevStart && e.date < prevEnd);
+
+  const totalSpent = roundMoney(monthExpenses.reduce((s, e) => s + e.amount, 0));
+  const rentTotal = roundMoney(
+    monthExpenses.filter((e) => e.category === "Rent").reduce((s, e) => s + e.amount, 0),
+  );
+  const groceryTotal = roundMoney(
+    monthExpenses.filter((e) => e.category === "Groceries").reduce((s, e) => s + e.amount, 0),
+  );
+  const vegetableTotal = roundMoney(
+    monthExpenses.filter((e) => e.category === "Vegetables").reduce((s, e) => s + e.amount, 0),
+  );
+  const gasTotal = roundMoney(
+    monthExpenses.filter((e) => e.category === "Gas").reduce((s, e) => s + e.amount, 0),
+  );
+  const miscTotal = roundMoney(
+    monthExpenses.filter((e) => e.category === "Misc").reduce((s, e) => s + e.amount, 0),
+  );
+
+  const categoryTotals: Record<ExpenseCategory, number> = {
+    Rent: 0,
+    Groceries: 0,
+    Vegetables: 0,
+    Gas: 0,
+    Misc: 0,
+  };
+  for (const e of monthExpenses) {
+    categoryTotals[e.category] += e.amount;
+  }
+
+  const categoryBreakdown = (
+    Object.keys(categoryTotals) as ExpenseCategory[]
+  ).map((category) => ({
+    category,
+    total: roundMoney(categoryTotals[category]),
+    emoji: CATEGORY_META[category].emoji,
+  }));
+
+  const paidByMonth = computeTotalPaidByUser(monthExpenses.map(toLedgerExpense));
+  const perUserContribution = users.map((u) => ({
+    userId: u._id.toString(),
+    name: u.name,
+    paid: roundMoney(paidByMonth[u._id.toString()] ?? 0),
+  }));
+
+  const shareByUser: Record<string, number> = {};
+  for (const e of monthExpenses) {
+    const share = e.amount / e.splitBetween.length;
+    for (const id of e.splitBetween) {
+      const sid = id.toString();
+      shareByUser[sid] = (shareByUser[sid] ?? 0) + share;
+    }
+  }
+  const perUserShare = users.map((u) => ({
+    userId: u._id.toString(),
+    name: u.name,
+    share: roundMoney(shareByUser[u._id.toString()] ?? 0),
+  }));
+
+  const previousMonthTotal = roundMoney(prevMonthExpenses.reduce((s, e) => s + e.amount, 0));
+  let percentChangeVsPrevious: number | undefined;
+  let insight: string | undefined;
+  if (previousMonthTotal > 0) {
+    percentChangeVsPrevious = roundMoney(
+      ((totalSpent - previousMonthTotal) / previousMonthTotal) * 100,
+    );
+    if (percentChangeVsPrevious > 1) {
+      insight = `You spent ${percentChangeVsPrevious}% more than last month.`;
+    } else if (percentChangeVsPrevious < -1) {
+      insight = `You spent ${Math.abs(percentChangeVsPrevious)}% less than last month.`;
+    }
+  } else if (totalSpent > 0 && previousMonthTotal === 0) {
+    insight = "No expenses recorded for the previous month.";
+  }
+
+  const winnerEntries = Object.entries(paidByMonth).sort((a, b) => b[1] - a[1]);
+  const monthlyWinner =
+    winnerEntries.length > 0 && winnerEntries[0][1] > 0
+      ? {
+          userId: winnerEntries[0][0],
+          name: userMap.get(winnerEntries[0][0]) ?? "Unknown",
+          totalPaid: roundMoney(winnerEntries[0][1]),
+        }
+      : undefined;
+
+  const { ledgerExpenses, ledgerSettlements } = ledgerThroughCutoff(
+    allExpenses,
+    allSettlements,
+    end,
+  );
+  const balances = computeBalances(ledgerExpenses, ledgerSettlements);
+  const balanceRows = users.map((u) => ({
+    userId: u._id.toString(),
+    name: u.name,
+    balance: roundMoney(balances[u._id.toString()] ?? 0),
+  }));
+
+  const suggestionsRaw = simplifyDebts(balances);
+  const suggestions: SettlementSuggestion[] = suggestionsRaw.map((s) => ({
+    fromUserId: s.from,
+    toUserId: s.to,
+    amount: roundMoney(s.amount),
+    fromName: userMap.get(s.from) ?? "?",
+    toName: userMap.get(s.to) ?? "?",
+  }));
+
+  const recentExpenses = [...monthExpenses]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .slice(0, 8)
+    .map((e) => ({
+      _id: e._id.toString(),
+      title: e.title,
+      amount: e.amount,
+      category: e.category,
+      paidBy: e.paidBy.toString(),
+      splitBetween: e.splitBetween.map((id) => id.toString()),
+      date: e.date.toISOString(),
+      notes: e.notes,
+      billImage: e.billImage,
+    }));
+
+  const recentExpensesDetailed = recentExpenses.map((row) => ({
+    ...row,
+    paidByName: userMap.get(row.paidBy) ?? "Unknown",
+  }));
+
+  const dailySpend = buildDailySpendSeries(
+    monthExpenses.map((e) => ({ date: e.date, amount: e.amount })),
+    prevMonthExpenses.map((e) => ({ date: e.date, amount: e.amount })),
+    start,
+    end,
+  );
+
+  return {
+    monthKey,
+    monthLabel: format(start, "MMMM yyyy"),
+    totalSpent,
+    rentTotal,
+    groceryTotal,
+    vegetableTotal,
+    gasTotal,
+    miscTotal,
+    categoryBreakdown,
+    perUserContribution,
+    perUserShare,
+    previousMonthTotal,
+    percentChangeVsPrevious,
+    monthlyWinner,
+    insight,
+    pendingBalanceMagnitude: pendingImbalanceMagnitude(balances),
+    balances: balanceRows,
+    suggestions,
+    recentExpenses,
+    recentExpensesDetailed,
+    dailySpend,
+  };
+}
