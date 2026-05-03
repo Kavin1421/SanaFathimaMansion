@@ -3,6 +3,26 @@ import { EXPENSE_CATEGORIES } from "@/lib/constants";
 
 const objectIdString = z.string().min(1);
 
+export const registerAccountSchema = z.object({
+  name: z.string().min(1).max(80),
+  email: z.string().email().max(120),
+  password: z.string().min(8).max(128),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email().max(120),
+  password: z.string().min(1).max(128),
+});
+
+export const signupFormSchema = registerAccountSchema
+  .extend({
+    confirmPassword: z.string().min(1).max(128),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 export const createUserSchema = z.object({
   name: z.string().min(1).max(80),
   avatar: z.union([z.string().url(), z.literal("")]).optional(),
@@ -40,6 +60,9 @@ export const completeSettlementSchema = z.object({
   id: objectIdString,
 });
 
+export type RegisterAccountInput = z.infer<typeof registerAccountSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+export type SignupFormInput = z.infer<typeof signupFormSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;

@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import type { ExpenseCategory } from "@/lib/constants";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { requireAuthSession } from "@/lib/api-auth";
 import { listExpenses } from "@/services/expenses";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const session = await requireAuthSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const { searchParams } = new URL(req.url);
     const monthKey = searchParams.get("month") ?? undefined;

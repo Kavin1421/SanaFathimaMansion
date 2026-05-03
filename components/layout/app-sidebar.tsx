@@ -15,7 +15,14 @@ const navLinks = [
   { href: "/reports", label: "Reports", icon: BarChart3 },
 ];
 
-export function AppSidebar({ className }: { className?: string }) {
+export function AppSidebar({
+  className,
+  houseName,
+}: {
+  className?: string;
+  houseName?: string;
+}) {
+  const displayHouse = houseName?.trim() || DEFAULT_HOUSE_NAME;
   const pathname = usePathname();
   const { monthKey, setMonthKey } = useMonthParam();
   const year = monthKey.slice(0, 4);
@@ -28,7 +35,7 @@ export function AppSidebar({ className }: { className?: string }) {
     <div className={cn("flex h-full flex-col gap-6", className)}>
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">House</p>
-        <p className="mt-1 text-lg font-semibold tracking-tight">{DEFAULT_HOUSE_NAME}</p>
+        <p className="mt-1 text-lg font-semibold tracking-tight">{displayHouse}</p>
         <p className="text-xs text-muted-foreground">Shared expenses</p>
       </div>
 

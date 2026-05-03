@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 import {
   createExpenseSchema,
   updateExpenseSchema,
@@ -11,9 +13,18 @@ import { notifyWhatsAppExpense } from "@/lib/whatsapp-notify";
 import { createExpense, deleteExpense, updateExpense } from "@/services/expenses";
 import type { ActionResult } from "./users";
 
+async function requireUserSession() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return null;
+  return session;
+}
+
 export async function createExpenseAction(
   input: CreateExpenseInput,
 ): Promise<ActionResult<Awaited<ReturnType<typeof createExpense>>>> {
+  if (!(await requireUserSession())) {
+    return { ok: false, error: "Unauthorized" };
+  }
   const parsed = createExpenseSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
@@ -33,6 +44,9 @@ export async function createExpenseAction(
 export async function updateExpenseAction(
   input: UpdateExpenseInput,
 ): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof updateExpense>>>>> {
+  if (!(await requireUserSession())) {
+    return { ok: false, error: "Unauthorized" };
+  }
   const parsed = updateExpenseSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
@@ -51,6 +65,9 @@ export async function updateExpenseAction(
 }
 
 export async function deleteExpenseAction(id: string): Promise<ActionResult<null>> {
+  if (!(await requireUserSession())) {
+    return { ok: false, error: "Unauthorized" };
+  }
   try {
     const ok = await deleteExpense(id);
     if (!ok) return { ok: false, error: "Expense not found" };

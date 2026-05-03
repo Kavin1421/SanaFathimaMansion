@@ -4,9 +4,12 @@
  */
 import { config } from "dotenv";
 import { resolve } from "path";
+import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { connectDb } from "../lib/db";
+import { Account } from "../models/Account";
 import { Expense } from "../models/Expense";
+import { HouseSettings } from "../models/HouseSettings";
 import { Settlement } from "../models/Settlement";
 import { User } from "../models/User";
 import { recomputeAllUserBalances } from "../services/recompute";
@@ -21,7 +24,27 @@ async function main() {
 
   await connectDb();
   console.log("Connected. Clearing collections…");
-  await Promise.all([Expense.deleteMany({}), Settlement.deleteMany({}), User.deleteMany({})]);
+  await Promise.all([
+    Expense.deleteMany({}),
+    Settlement.deleteMany({}),
+    User.deleteMany({}),
+    Account.deleteMany({}),
+    HouseSettings.deleteMany({}),
+  ]);
+
+  const demoPassword = "Demo12345!";
+  const passwordHash = await bcrypt.hash(demoPassword, 12);
+  await Account.create({
+    email: "demo@sana.local",
+    name: "Demo Admin",
+    passwordHash,
+    onboardingCompleted: true,
+  });
+
+  await HouseSettings.create({
+    key: "default",
+    displayName: "Sana Fathima Mansion",
+  });
 
   const users = await User.insertMany([
     { name: "Kevin", totalPaid: 0, balance: 0 },
@@ -132,7 +155,8 @@ async function main() {
   });
 
   await recomputeAllUserBalances();
-  console.log("Seed complete. Users:", users.map((u) => u.name).join(", "));
+  console.log("Seed complete. Ledger users:", users.map((u) => u.name).join(", "));
+  console.log(`Demo auth: demo@sana.local / ${demoPassword} (onboarding skipped)`);
   await mongoose.connection.close();
 }
 

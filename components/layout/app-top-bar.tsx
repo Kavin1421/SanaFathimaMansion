@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 import { MonthSelect } from "@/components/month-select";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -16,7 +24,8 @@ import { queryKeys } from "@/lib/query-keys";
 import { useMonthParam } from "@/hooks/use-month";
 import type { UserDTO } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { Menu } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 
 const pathTitles: { prefix: string; title: string }[] = [
@@ -24,6 +33,7 @@ const pathTitles: { prefix: string; title: string }[] = [
   { prefix: "/expenses", title: "Expenses" },
   { prefix: "/users", title: "Users" },
   { prefix: "/reports", title: "Reports" },
+  { prefix: "/onboarding", title: "Welcome" },
 ];
 
 function titleForPath(pathname: string): string {
@@ -31,10 +41,21 @@ function titleForPath(pathname: string): string {
   return hit?.title ?? "SanaFathima Mansion";
 }
 
-export function AppTopBar() {
+function initialsFromName(name: string | null | undefined): string {
+  if (!name?.trim()) return "?";
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export function AppTopBar({ houseName }: { houseName?: string }) {
   const pathname = usePathname();
   const { monthKey, setMonthKey } = useMonthParam();
   const title = titleForPath(pathname);
+  const { data: session } = useSession();
 
   const { data: users } = useQuery({
     queryKey: queryKeys.users,
@@ -46,14 +67,10 @@ export function AppTopBar() {
     staleTime: 60_000,
   });
 
-  const first = users?.[0];
-  const initials =
-    first?.name
-      ?.split(/\s+/)
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() ?? "?";
+  const firstLedger = users?.[0];
+  const displayName = session?.user?.name ?? firstLedger?.name;
+  const avatarSrc = session?.user?.image ?? firstLedger?.avatar;
+  const initials = initialsFromName(displayName);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
@@ -68,7 +85,7 @@ export function AppTopBar() {
             <SheetHeader className="sr-only">
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
-            <AppSidebar />
+            <AppSidebar houseName={houseName} />
           </SheetContent>
         </Sheet>
         <h1 className="truncate text-lg font-semibold tracking-tight md:text-xl">{title}</h1>
@@ -77,12 +94,38 @@ export function AppTopBar() {
       <div className="flex items-center gap-2 md:gap-3">
         <MonthSelect value={monthKey} onChange={setMonthKey} />
         <ThemeToggle />
-        <Avatar className="h-9 w-9 border">
-          {first?.avatar ? (
-            <AvatarImage src={first.avatar} alt={first.name} />
-          ) : null}
-          <AvatarFallback>{initials}</AvatarFallback>
-        </Avatar>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Account menu"
+            >
+              <Avatar className="h-9 w-9 border">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName ?? "Account"} /> : null}
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-0.5">
+                <p className="text-sm font-medium leading-none">{displayName ?? "Signed in"}</p>
+                {session?.user?.email ? (
+                  <p className="text-xs leading-none text-muted-foreground">{session.user.email}</p>
+                ) : null}
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer gap-2"
+              onSelect={() => signOut({ callbackUrl: "/" })}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
