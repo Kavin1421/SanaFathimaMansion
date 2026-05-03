@@ -57,7 +57,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
   const summaryText = buildSummaryText(s);
 
   return (
-    <div className="grid grid-cols-12 gap-10">
+    <div className="grid grid-cols-12 gap-6 sm:gap-8 md:gap-10">
       <DashboardHeader summary={s} summaryText={summaryText} monthKey={monthKey} />
 
       <div className="col-span-12">

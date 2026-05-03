@@ -32,6 +32,61 @@ export const updateUserSchema = createUserSchema.partial().extend({
   id: objectIdString,
 });
 
+/** Accepts Cloudinary / any https image URL; trims; empty → undefined (omit). */
+const billImageUrlSchema = z.preprocess(
+  (v) => {
+    if (v === undefined || v === null) return undefined;
+    if (typeof v !== "string") return v;
+    const t = v.trim();
+    return t === "" ? undefined : t;
+  },
+  z
+    .string()
+    .max(2048)
+    .refine(
+      (s) => {
+        try {
+          const u = new URL(s);
+          return u.protocol === "https:" || u.protocol === "http:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "Bill image must be a valid http(s) URL" },
+    )
+    .optional(),
+);
+
+/** For updates: same URL rules, or `null` to remove a stored image. */
+const billImageUpdateSchema = z.preprocess(
+  (v) => {
+    if (v === null) return null;
+    if (v === undefined) return undefined;
+    if (typeof v !== "string") return v;
+    const t = v.trim();
+    return t === "" ? null : t;
+  },
+  z
+    .union([
+      z
+        .string()
+        .max(2048)
+        .refine(
+          (s) => {
+            try {
+              const u = new URL(s);
+              return u.protocol === "https:" || u.protocol === "http:";
+            } catch {
+              return false;
+            }
+          },
+          { message: "Bill image must be a valid http(s) URL" },
+        ),
+      z.null(),
+    ])
+    .optional(),
+);
+
 const expenseFields = {
   title: z.string().min(1).max(120),
   amount: z.number().positive(),
@@ -42,7 +97,7 @@ const expenseFields = {
   date: z.coerce.date(),
   notes: z.string().max(2000).optional(),
   description: z.string().max(2000).optional(),
-  billImage: z.string().optional(),
+  billImage: billImageUrlSchema,
 };
 
 export const expenseBaseSchema = z
@@ -70,8 +125,13 @@ export const expenseBaseSchema = z
 
 export const createExpenseSchema = expenseBaseSchema;
 
+const expenseUpdateFields = {
+  ...expenseFields,
+  billImage: billImageUpdateSchema,
+};
+
 export const updateExpenseSchema = z
-  .object(expenseFields)
+  .object(expenseUpdateFields)
   .partial()
   .extend({ id: objectIdString })
   .superRefine((data, ctx) => {

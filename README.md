@@ -85,7 +85,7 @@ See `whatsapp-bot/` for QR login, group id, and bot env.
 
 - `app/(marketing)/` — landing
 - `app/(auth)/` — login, signup, forgot-password placeholder
-- `app/(app)/` — shell + dashboard, expenses, users, reports, onboarding
+- `app/(app)/` — shell + dashboard, expenses, users, reports, audit logs (super admin), onboarding
 - `app/api/` — auth, CRUD, house, PDF, upload
 - `components/` — UI, layout, marketing, auth
 - `lib/` — db, auth options, validation, WhatsApp notify helpers
@@ -96,7 +96,9 @@ See `whatsapp-bot/` for QR login, group id, and bot env.
 ## Product notes (household finance)
 
 - **House expense** (`splitEnabled: false`): counts toward the monthly wallet total but does **not** change ledger user balances (no IOU movement).
-- **Admin-only** (MVP): edit/delete any expense, edit/delete ledger users, set monthly budget, start new month (WhatsApp reset), balance override. Any authenticated user can still **create** expenses and **add** roommates for onboarding.
+- **Super admin** (email-based): `SUPER_ADMIN_EMAIL` (default `kavinkumar24@gmail.com`) can edit/delete any expense, edit/delete ledger users, set monthly budget, start new month (WhatsApp reset), balance override, and open **Audit logs**. JWT/session expose `isSuperAdmin` for UI; re-login after deploy picks up new claims. Any authenticated user can still **create** expenses and **add** roommates for onboarding.
+- **Audit logs**: append-only `AuditLog` collection (expense create/update/delete, budget, month reset, user changes, balance override, sign-in). `/audit-logs` and `GET /api/audit-logs` are super-admin only.
+- **Expense images**: the client uploads to `/api/upload` first, then saves the expense with the Cloudinary URL; WhatsApp notifications run asynchronously and failures are logged only (they do not roll back the expense).
 - **Balance override**: direct `User.balance` changes may be overwritten the next time balances are recomputed from expenses; treat as a temporary adjustment unless you add durable override bookkeeping.
 
 ## License

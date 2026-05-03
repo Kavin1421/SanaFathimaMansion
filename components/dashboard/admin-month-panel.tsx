@@ -20,7 +20,7 @@ export function AdminMonthPanel({
 }) {
   const { data: session } = useSession();
   const router = useRouter();
-  const isAdmin = session?.user?.role === "admin";
+  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin);
   const [budgetInput, setBudgetInput] = useState(
     summary.monthBudget != null ? String(summary.monthBudget) : "30000",
   );
@@ -28,7 +28,7 @@ export function AdminMonthPanel({
   const [carryForward, setCarryForward] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  if (!isAdmin) return null;
+  if (!isSuperAdmin) return null;
 
   async function saveBudget() {
     const n = Number(budgetInput.replace(/,/g, ""));

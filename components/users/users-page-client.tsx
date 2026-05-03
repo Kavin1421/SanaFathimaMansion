@@ -36,7 +36,7 @@ import { toast } from "sonner";
 
 export function UsersPageClient() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "admin";
+  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin);
   const qc = useQueryClient();
   const { data: users, isLoading } = useQuery({
     queryKey: queryKeys.users,
@@ -139,7 +139,7 @@ export function UsersPageClient() {
                     <CardDescription>Total paid · {formatInr(u.totalPaid)}</CardDescription>
                   </div>
                 </div>
-                {isAdmin ? (
+                {isSuperAdmin ? (
                   <div className="flex gap-1">
                     <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => openEdit(u)}>
                       <Pencil className="h-4 w-4" />

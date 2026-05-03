@@ -3,9 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
+import { performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { isAdminSession } from "@/lib/admin";
 import { connectDb } from "@/lib/db";
 import { User } from "@/models/User";
+import { appendAuditLog } from "@/services/audit-log";
+import { getUserById } from "@/services/users";
 import type { ActionResult } from "./users";
 
 /** Direct balance override; next full expense recompute will refresh from ledger. */
@@ -19,12 +22,13 @@ export async function adminOverrideBalanceAction(
     return { ok: false, error: "Unauthorized" };
   }
   if (!isAdminSession(session)) {
-    return { ok: false, error: "Admin only" };
+    return { ok: false, error: "Super admin only" };
   }
   if (!Number.isFinite(balance)) {
     return { ok: false, error: "Invalid balance" };
   }
   try {
+    const before = await getUserById(userId);
     await connectDb();
     const patch: { balance: number; totalPaid?: number } = { balance };
     if (totalPaid !== undefined && Number.isFinite(totalPaid)) {
@@ -32,10 +36,26 @@ export async function adminOverrideBalanceAction(
     }
     const r = await User.findByIdAndUpdate(userId, patch);
     if (!r) return { ok: false, error: "User not found" };
+    try {
+      await appendAuditLog({
+        actionType: "UPDATE_USER",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: userId, label: before?.name ?? userId },
+        previousValue: toAuditJson(before),
+        newValue: toAuditJson({
+          kind: "balance_override",
+          balance,
+          totalPaid: totalPaid !== undefined && Number.isFinite(totalPaid) ? totalPaid : undefined,
+        }),
+      });
+    } catch (e) {
+      console.error("[audit] balance override", e);
+    }
     console.info("[admin] balance override", { userId, balance, totalPaid });
     revalidatePath("/dashboard");
     revalidatePath("/users");
     revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
     return { ok: true, data: null };
   } catch (e) {
     console.error(e);

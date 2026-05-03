@@ -3,15 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
+import { performerFromSession, toAuditJson } from "@/lib/audit-helper";
+import { isAdminSession } from "@/lib/admin";
 import {
   createExpenseSchema,
   updateExpenseSchema,
   type CreateExpenseInput,
   type UpdateExpenseInput,
 } from "@/lib/validation";
-import { isAdminSession } from "@/lib/admin";
 import { notifyWhatsAppExpense } from "@/lib/whatsapp-notify";
-import { createExpense, deleteExpense, updateExpense } from "@/services/expenses";
+import { appendAuditLog } from "@/services/audit-log";
+import { createExpense, deleteExpense, getExpenseById, updateExpense } from "@/services/expenses";
 import type { ActionResult } from "./users";
 
 async function requireUserSession() {
@@ -23,7 +25,8 @@ async function requireUserSession() {
 export async function createExpenseAction(
   input: CreateExpenseInput,
 ): Promise<ActionResult<Awaited<ReturnType<typeof createExpense>>>> {
-  if (!(await requireUserSession())) {
+  const session = await requireUserSession();
+  if (!session) {
     return { ok: false, error: "Unauthorized" };
   }
   const parsed = createExpenseSchema.safeParse(input);
@@ -32,9 +35,20 @@ export async function createExpenseAction(
   }
   try {
     const data = await createExpense(parsed.data);
+    try {
+      await appendAuditLog({
+        actionType: "CREATE_EXPENSE",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id: data._id, label: data.title },
+        newValue: toAuditJson(data),
+      });
+    } catch (e) {
+      console.error("[audit] create expense", e);
+    }
     notifyWhatsAppExpense(data, "created");
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
     return { ok: true, data };
   } catch (e) {
     console.error(e);
@@ -50,18 +64,31 @@ export async function updateExpenseAction(
     return { ok: false, error: "Unauthorized" };
   }
   if (!isAdminSession(session)) {
-    return { ok: false, error: "Only an admin can edit expenses" };
+    return { ok: false, error: "Only a super admin can edit expenses" };
   }
   const parsed = updateExpenseSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
   }
   try {
+    const before = await getExpenseById(parsed.data.id);
     const data = await updateExpense(parsed.data);
     if (!data) return { ok: false, error: "Expense not found" };
+    try {
+      await appendAuditLog({
+        actionType: "UPDATE_EXPENSE",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id: data._id, label: data.title },
+        previousValue: toAuditJson(before),
+        newValue: toAuditJson(data),
+      });
+    } catch (e) {
+      console.error("[audit] update expense", e);
+    }
     notifyWhatsAppExpense(data, "updated");
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
     return { ok: true, data };
   } catch (e) {
     console.error(e);
@@ -76,13 +103,25 @@ export async function deleteExpenseAction(id: string): Promise<ActionResult<null
     return { ok: false, error: "Unauthorized" };
   }
   if (!isAdminSession(session)) {
-    return { ok: false, error: "Only an admin can delete expenses" };
+    return { ok: false, error: "Only a super admin can delete expenses" };
   }
   try {
+    const before = await getExpenseById(id);
     const ok = await deleteExpense(id);
     if (!ok) return { ok: false, error: "Expense not found" };
+    try {
+      await appendAuditLog({
+        actionType: "DELETE_EXPENSE",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id, label: before?.title },
+        previousValue: toAuditJson(before),
+      });
+    } catch (e) {
+      console.error("[audit] delete expense", e);
+    }
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
     return { ok: true, data: null };
   } catch (e) {
     console.error(e);

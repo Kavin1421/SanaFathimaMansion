@@ -301,7 +301,8 @@ export function ExpenseFormDialog({ users, monthKey, expense, open, onOpenChange
       if (splitEnabled && splitIds.size === 0) {
         throw new Error("Pick at least one person to split with");
       }
-      const payload = {
+      const trimmedBill = billImage.trim();
+      const base = {
         title: title.trim(),
         amount: amt,
         category: category as (typeof EXPENSE_CATEGORIES)[number],
@@ -311,14 +312,18 @@ export function ExpenseFormDialog({ users, monthKey, expense, open, onOpenChange
         date: new Date(dateStr),
         notes: notes.trim() || undefined,
         description: description.trim() || undefined,
-        billImage: billImage.trim() || undefined,
       };
       if (expense) {
-        const r = await updateExpenseAction({ id: expense._id, ...payload });
+        const billImagePayload = trimmedBill.length > 0 ? trimmedBill : null;
+        const r = await updateExpenseAction({ id: expense._id, ...base, billImage: billImagePayload });
         if (!r.ok) throw new Error(r.error);
         return r.data;
       }
-      const r = await createExpenseAction(payload);
+      const createPayload = {
+        ...base,
+        ...(trimmedBill.length > 0 ? { billImage: trimmedBill } : {}),
+      };
+      const r = await createExpenseAction(createPayload);
       if (!r.ok) throw new Error(r.error);
       return r.data;
     },

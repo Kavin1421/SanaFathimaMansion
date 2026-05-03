@@ -18,6 +18,7 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { connectDb } from "../lib/db";
 import { Account } from "../models/Account";
+import { AuditLog } from "../models/AuditLog";
 import { Expense } from "../models/Expense";
 import { HouseMonth } from "../models/HouseMonth";
 import { HouseSettings } from "../models/HouseSettings";
@@ -118,6 +119,7 @@ async function seedFull() {
     Account.deleteMany({}),
     HouseSettings.deleteMany({}),
     HouseMonth.deleteMany({}),
+    AuditLog.deleteMany({}),
   ]);
 
   const demoPassword = "Demo12345!";

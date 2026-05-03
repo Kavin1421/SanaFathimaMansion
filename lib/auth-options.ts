@@ -4,6 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { connectDb } from "@/lib/db";
 import { Account } from "@/models/Account";
+import { superAdminEmail } from "@/lib/super-admin";
 
 const googleConfigured =
   Boolean(process.env.GOOGLE_CLIENT_ID?.length) && Boolean(process.env.GOOGLE_CLIENT_SECRET?.length);
@@ -59,6 +60,9 @@ export const authOptions: NextAuthOptions = {
         );
         token.role = (user as { role?: "admin" | "user" }).role ?? "user";
         token.ledgerUserId = (user as { ledgerUserId?: string | null }).ledgerUserId ?? null;
+        const em = String((user as { email?: string }).email ?? "").toLowerCase().trim();
+        token.email = em;
+        token.isSuperAdmin = em === superAdminEmail();
       }
 
       if (user && account?.provider === "google" && user.email) {
@@ -83,17 +87,23 @@ export const authOptions: NextAuthOptions = {
         token.onboardingCompleted = acc.onboardingCompleted;
         token.role = acc.role ?? "user";
         token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
+        token.email = acc.email.toLowerCase().trim();
+        token.isSuperAdmin = token.email === superAdminEmail();
       }
 
       if (token.id) {
         await connectDb();
         const acc = await Account.findById(token.id)
-          .select("onboardingCompleted role ledgerUserId")
+          .select("onboardingCompleted role ledgerUserId email")
           .lean();
         if (acc) {
           token.onboardingCompleted = Boolean(acc.onboardingCompleted);
           token.role = acc.role ?? "user";
           token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
+          if (acc.email) {
+            token.email = acc.email.toLowerCase().trim();
+            token.isSuperAdmin = token.email === superAdminEmail();
+          }
         }
       }
 
@@ -105,8 +115,31 @@ export const authOptions: NextAuthOptions = {
         session.user.onboardingCompleted = Boolean(token.onboardingCompleted);
         session.user.role = (token.role as "admin" | "user") ?? "user";
         session.user.ledgerUserId = (token.ledgerUserId as string | undefined) ?? null;
+        session.user.email =
+          (typeof token.email === "string" && token.email) ||
+          session.user.email ||
+          "";
+        session.user.isSuperAdmin = Boolean(token.isSuperAdmin);
       }
       return session;
+    },
+  },
+  events: {
+    async signIn({ user }) {
+      try {
+        const { appendAuditLog } = await import("@/services/audit-log");
+        await appendAuditLog({
+          actionType: "LOGIN",
+          performedBy: {
+            accountId: user.id ?? "",
+            email: (user as { email?: string }).email?.toLowerCase().trim() ?? "",
+            name: user.name ?? "",
+          },
+          targetEntity: { type: "session", label: "signIn" },
+        });
+      } catch (e) {
+        console.error("[audit] signIn log failed", e);
+      }
     },
   },
 };

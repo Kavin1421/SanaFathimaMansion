@@ -1,8 +1,8 @@
 "use client";
 
 import { deleteExpenseAction } from "@/app/actions/expenses";
+import { ExpenseDetailDialog } from "@/components/expenses/expense-detail-dialog";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
-import { ImagePreviewDialog } from "@/components/image-preview-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,18 +26,19 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CATEGORY_META, EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
-import { formatInr } from "@/lib/utils";
+import { cn, formatInr } from "@/lib/utils";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import Image from "next/image";
+import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "admin";
+  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin);
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -46,6 +47,8 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<ExpenseDTO | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const { data: users = [] } = useQuery({
     queryKey: queryKeys.users,
@@ -103,9 +106,15 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
       toast.success("Expense deleted");
       qc.invalidateQueries({ queryKey: queryKeys.expenses(filters) });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
+      qc.invalidateQueries({ queryKey: ["auditLogs"] });
       setDeleteId(null);
     },
   });
+
+  function openView(e: ExpenseDTO) {
+    setViewing(e);
+    setDetailOpen(true);
+  }
 
   return (
     <div className="space-y-6">
@@ -171,59 +180,97 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
           {isLoading ? (
             <div className="space-y-2 p-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
               ))}
             </div>
           ) : !expenses?.length ? (
             <p className="p-8 text-center text-sm text-muted-foreground">No expenses match.</p>
           ) : (
             <ul className="divide-y">
-              {expenses.map((e) => (
-                <li key={e._id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-                  <div className="space-y-1">
-                    <p className="font-medium">{e.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {CATEGORY_META[e.category as ExpenseCategory].emoji} {e.category} · Paid by{" "}
-                      {userMap.get(e.paidBy) ?? "?"} · {new Date(e.date).toLocaleDateString()}
-                    </p>
-                    {e.description ? (
-                      <p className="text-xs text-muted-foreground line-clamp-2">{e.description}</p>
-                    ) : e.notes ? (
-                      <p className="text-xs text-muted-foreground line-clamp-2">{e.notes}</p>
-                    ) : null}
-                    {!e.splitEnabled ? (
-                      <p className="text-xs text-amber-700 dark:text-amber-400">House expense (no split)</p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-lg font-semibold tabular-nums">{formatInr(e.amount)}</span>
-                    {e.billImage ? <ImagePreviewDialog src={e.billImage} title={e.title} /> : null}
-                    {isAdmin ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-xl"
-                          onClick={() => {
-                            setEditing(e);
-                            setDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-xl text-destructive"
-                          onClick={() => setDeleteId(e._id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
+              {expenses.map((e) => {
+                const catMeta = CATEGORY_META[e.category as ExpenseCategory];
+                return (
+                  <li key={e._id}>
+                    <div
+                      className={cn(
+                        "flex flex-col gap-3 p-4 transition-[box-shadow,transform] duration-200 md:flex-row md:items-center md:justify-between",
+                        "motion-reduce:transform-none",
+                        "hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:transform-none",
+                      )}
+                    >
+                      <div className="flex min-w-0 flex-1 gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-lg">
+                          {catMeta.emoji}
+                        </div>
+                        {e.billImage ? (
+                          <Image
+                            src={e.billImage}
+                            alt=""
+                            width={48}
+                            height={48}
+                            className="h-12 w-12 shrink-0 rounded-lg border object-cover"
+                            sizes="48px"
+                            unoptimized
+                          />
+                        ) : null}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="font-medium leading-snug">{e.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {catMeta.emoji} {e.category} · Paid by {userMap.get(e.paidBy) ?? "?"} ·{" "}
+                            {new Date(e.date).toLocaleDateString()}
+                          </p>
+                          {e.description ? (
+                            <p className="text-xs text-muted-foreground line-clamp-2">{e.description}</p>
+                          ) : e.notes ? (
+                            <p className="text-xs text-muted-foreground line-clamp-2">{e.notes}</p>
+                          ) : null}
+                          {!e.splitEnabled ? (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">House expense (no split)</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 md:flex-col md:items-end lg:flex-row lg:items-center">
+                        <span className="text-lg font-semibold tabular-nums">{formatInr(e.amount)}</span>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="rounded-xl"
+                            onClick={() => openView(e)}
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            View
+                          </Button>
+                          {isSuperAdmin ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-xl"
+                                onClick={() => {
+                                  setEditing(e);
+                                  setDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-xl text-destructive"
+                                onClick={() => setDeleteId(e._id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>
@@ -240,10 +287,20 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
         expense={editing}
       />
 
+      <ExpenseDetailDialog
+        expense={viewing}
+        users={users}
+        open={detailOpen}
+        onOpenChange={(o) => {
+          setDetailOpen(o);
+          if (!o) setViewing(null);
+        }}
+      />
+
       <Button
         type="button"
         size="lg"
-        className="fixed bottom-5 right-4 z-40 h-14 rounded-full shadow-lg md:hidden"
+        className="fixed z-40 h-14 rounded-full shadow-lg md:hidden bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))]"
         onClick={() => {
           setEditing(null);
           setDialogOpen(true);

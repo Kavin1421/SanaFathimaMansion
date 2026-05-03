@@ -26,6 +26,8 @@ const expenseBody = z.object({
   budgetUsagePercent: z.number().nullable(),
   detailUrl: z.string().url().optional(),
   hasBill: z.boolean().optional(),
+  /** When set, sends one message: image with expense text as caption (no separate bill message). */
+  imageUrl: z.string().url().optional(),
   variant: z.enum(["created", "updated", "settlement"]).optional(),
   settlementToName: z.string().optional(),
 });
@@ -104,7 +106,8 @@ export function sendMessageRouter(): Router {
       const payload = parsed.data;
 
       if (payload.type === "expense") {
-        await sendExpenseMessage(chat, payload);
+        const { type: _t, ...expensePayload } = payload;
+        await sendExpenseMessage(chat, expensePayload);
       } else if (payload.type === "wallet") {
         await sendWalletMessage(chat, payload);
       } else if (payload.type === "month_reset") {

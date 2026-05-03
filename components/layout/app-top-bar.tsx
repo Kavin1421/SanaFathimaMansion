@@ -27,12 +27,14 @@ import { useQuery } from "@tanstack/react-query";
 import { LogOut, Menu } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const pathTitles: { prefix: string; title: string }[] = [
   { prefix: "/dashboard", title: "Dashboard" },
   { prefix: "/expenses", title: "Expenses" },
   { prefix: "/users", title: "Users" },
   { prefix: "/reports", title: "Reports" },
+  { prefix: "/audit-logs", title: "Audit logs" },
   { prefix: "/onboarding", title: "Welcome" },
 ];
 
@@ -51,11 +53,22 @@ function initialsFromName(name: string | null | undefined): string {
     .toUpperCase();
 }
 
-export function AppTopBar({ houseName }: { houseName?: string }) {
+export function AppTopBar({
+  houseName,
+  showAuditNav = false,
+}: {
+  houseName?: string;
+  showAuditNav?: boolean;
+}) {
   const pathname = usePathname();
   const { monthKey, setMonthKey } = useMonthParam();
   const title = titleForPath(pathname);
   const { data: session } = useSession();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   const { data: users } = useQuery({
     queryKey: queryKeys.users,
@@ -73,35 +86,41 @@ export function AppTopBar({ houseName }: { houseName?: string }) {
   const initials = initialsFromName(displayName);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        <Sheet>
+    <header className="sticky top-0 z-30 flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-background/80 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-md sm:flex-nowrap md:min-h-16 md:py-0 md:pl-[max(1.5rem,env(safe-area-inset-left))] md:pr-[max(1.5rem,env(safe-area-inset-right))] md:pt-0">
+      <div className="flex min-w-0 min-h-10 flex-1 items-center gap-2 sm:gap-3 md:flex-initial md:min-h-0">
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="md:hidden" aria-label="Open menu">
+            <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 md:hidden" aria-label="Open menu">
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[min(100%,20rem)] p-4">
+          <SheetContent side="left" className="w-[min(100vw-1rem,20rem)] max-w-[calc(100vw-env(safe-area-inset-left)-0.5rem)] p-4">
             <SheetHeader className="sr-only">
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
-            <AppSidebar houseName={houseName} />
+            <AppSidebar
+              houseName={houseName}
+              showAuditNav={showAuditNav}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
           </SheetContent>
         </Sheet>
-        <h1 className="truncate text-lg font-semibold tracking-tight md:text-xl">{title}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight sm:text-lg md:flex-initial md:text-xl">
+          {title}
+        </h1>
       </div>
 
-      <div className="flex items-center gap-2 md:gap-3">
+      <div className="flex w-full min-w-0 items-center justify-end gap-2 sm:w-auto sm:justify-start md:gap-3">
         <MonthSelect value={monthKey} onChange={setMonthKey} />
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:h-10 md:w-10"
               aria-label="Account menu"
             >
-              <Avatar className="h-9 w-9 border">
+              <Avatar className="h-9 w-9 border md:h-9 md:w-9">
                 {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName ?? "Account"} /> : null}
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>

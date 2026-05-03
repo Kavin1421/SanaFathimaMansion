@@ -66,60 +66,56 @@ export function notifyWhatsAppExpense(
 ): void {
   if (!isWhatsAppBotEnabled()) return;
   void (async () => {
-    await connectDb();
-    const appName = await getHouseDisplayName();
-    const payer = await User.findById(dto.paidBy).lean();
-    const payerName = payer?.name ?? "Someone";
-    const cat = dto.category as ExpenseCategory;
-    const meta = CATEGORY_META[cat];
-    const categoryEmoji = meta?.emoji ?? "💸";
-    const categoryLabel = dto.category;
+    try {
+      await connectDb();
+      const appName = await getHouseDisplayName();
+      const payer = await User.findById(dto.paidBy).lean();
+      const payerName = payer?.name ?? "Someone";
+      const cat = dto.category as ExpenseCategory;
+      const meta = CATEGORY_META[cat];
+      const categoryEmoji = meta?.emoji ?? "💸";
+      const categoryLabel = dto.category;
 
-    const expenseDate = new Date(dto.date);
-    const monthKey = monthKeyFromDate(expenseDate);
-    const { remaining, budget, totalSpent } = await getMonthWalletSnapshot(monthKey);
-    const dateLine = format(expenseDate, "d MMM yyyy");
+      const expenseDate = new Date(dto.date);
+      const monthKey = monthKeyFromDate(expenseDate);
+      const { remaining, budget, totalSpent } = await getMonthWalletSnapshot(monthKey);
+      const dateLine = format(expenseDate, "d MMM yyyy");
 
-    const budgetUsagePercent =
-      budget != null && budget > 0
-        ? Math.round((totalSpent / budget) * 100)
-        : null;
+      const budgetUsagePercent =
+        budget != null && budget > 0
+          ? Math.round((totalSpent / budget) * 100)
+          : null;
 
-    const isSplit = dto.splitEnabled !== false;
-    const n = dto.splitBetween.length;
-    const sharePer =
-      isSplit && n > 1 ? roundMoney(dto.amount / n) : null;
+      const isSplit = dto.splitEnabled !== false;
+      const n = dto.splitBetween.length;
+      const sharePer =
+        isSplit && n > 1 ? roundMoney(dto.amount / n) : null;
 
-    const detailUrl = appDetailUrl(monthKey);
+      const detailUrl = appDetailUrl(monthKey);
 
-    await post({
-      type: "expense",
-      appName,
-      title: dto.title,
-      payerName,
-      amount: dto.amount,
-      categoryEmoji,
-      categoryLabel,
-      dateLine,
-      isSplit,
-      splitCount: n,
-      splitShareAmount: sharePer ?? undefined,
-      walletRemaining: remaining,
-      budget,
-      budgetUsagePercent,
-      detailUrl: detailUrl ?? undefined,
-      hasBill: Boolean(dto.billImage),
-      variant: mode === "updated" ? "updated" : "created",
-    });
-
-    if (dto.billImage) {
-      const amt = dto.amount.toLocaleString("en-IN");
-      const caption = `🧾 *Receipt · ${dto.title}*\n*₹${amt}* · ${payerName}`.slice(0, 900);
+      const bill = dto.billImage?.trim();
       await post({
-        type: "bill",
-        imageUrl: dto.billImage,
-        caption,
+        type: "expense",
+        appName,
+        title: dto.title,
+        payerName,
+        amount: dto.amount,
+        categoryEmoji,
+        categoryLabel,
+        dateLine,
+        isSplit,
+        splitCount: n,
+        splitShareAmount: sharePer ?? undefined,
+        walletRemaining: remaining,
+        budget,
+        budgetUsagePercent,
+        detailUrl: detailUrl ?? undefined,
+        hasBill: false,
+        variant: mode === "updated" ? "updated" : "created",
+        ...(bill ? { imageUrl: bill } : {}),
       });
+    } catch (e) {
+      console.error("[whatsapp-notify] expense pipeline", e);
     }
   })();
 }
@@ -132,32 +128,36 @@ export function notifyWhatsAppSettlementRecorded(
 ): void {
   if (!isWhatsAppBotEnabled()) return;
   void (async () => {
-    await connectDb();
-    const appName = await getHouseDisplayName();
-    const [from, to] = await Promise.all([
-      User.findById(fromUserId).lean(),
-      User.findById(toUserId).lean(),
-    ]);
-    const monthKey = monthKeyFromDate(new Date());
-    const detailUrl = appDetailUrl(monthKey);
-    await post({
-      type: "expense",
-      appName,
-      title: "Settlement",
-      payerName: from?.name ?? "?",
-      amount,
-      categoryEmoji: "💸",
-      categoryLabel: "Settlement",
-      dateLine: format(new Date(), "d MMM yyyy"),
-      isSplit: false,
-      splitCount: 1,
-      walletRemaining: null,
-      budget: null,
-      budgetUsagePercent: null,
-      detailUrl: detailUrl ?? undefined,
-      variant: "settlement",
-      settlementToName: to?.name ?? "?",
-    });
+    try {
+      await connectDb();
+      const appName = await getHouseDisplayName();
+      const [from, to] = await Promise.all([
+        User.findById(fromUserId).lean(),
+        User.findById(toUserId).lean(),
+      ]);
+      const monthKey = monthKeyFromDate(new Date());
+      const detailUrl = appDetailUrl(monthKey);
+      await post({
+        type: "expense",
+        appName,
+        title: "Settlement",
+        payerName: from?.name ?? "?",
+        amount,
+        categoryEmoji: "💸",
+        categoryLabel: "Settlement",
+        dateLine: format(new Date(), "d MMM yyyy"),
+        isSplit: false,
+        splitCount: 1,
+        walletRemaining: null,
+        budget: null,
+        budgetUsagePercent: null,
+        detailUrl: detailUrl ?? undefined,
+        variant: "settlement",
+        settlementToName: to?.name ?? "?",
+      });
+    } catch (e) {
+      console.error("[whatsapp-notify] settlement", e);
+    }
   })();
 }
 
@@ -168,19 +168,23 @@ export function notifyWhatsAppMonthReset(
 ): void {
   if (!isWhatsAppBotEnabled()) return;
   void (async () => {
-    await connectDb();
-    const appName = await getHouseDisplayName();
-    const detailUrl = appDetailUrl(monthKey);
-    const monthStart = parse(`${monthKey}-01`, "yyyy-MM-dd", new Date());
-    const monthLabel = format(monthStart, "MMMM yyyy");
-    await post({
-      type: "month_reset",
-      appName,
-      monthKey,
-      monthLabel,
-      budget,
-      detailUrl: detailUrl ?? undefined,
-      carryForwardBalances: options?.carryForwardBalances,
-    });
+    try {
+      await connectDb();
+      const appName = await getHouseDisplayName();
+      const detailUrl = appDetailUrl(monthKey);
+      const monthStart = parse(`${monthKey}-01`, "yyyy-MM-dd", new Date());
+      const monthLabel = format(monthStart, "MMMM yyyy");
+      await post({
+        type: "month_reset",
+        appName,
+        monthKey,
+        monthLabel,
+        budget,
+        detailUrl: detailUrl ?? undefined,
+        carryForwardBalances: options?.carryForwardBalances,
+      });
+    } catch (e) {
+      console.error("[whatsapp-notify] month reset", e);
+    }
   })();
 }

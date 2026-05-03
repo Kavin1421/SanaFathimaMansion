@@ -100,6 +100,11 @@ export async function getExpenseById(id: string): Promise<ExpenseDTO | null> {
 
 export async function createExpense(input: CreateExpenseInput): Promise<ExpenseDTO> {
   await connectDb();
+  const bill =
+    typeof input.billImage === "string" && input.billImage.trim().length > 0
+      ? input.billImage.trim()
+      : undefined;
+
   const doc = await Expense.create({
     title: input.title,
     amount: input.amount,
@@ -110,7 +115,7 @@ export async function createExpense(input: CreateExpenseInput): Promise<ExpenseD
     date: input.date,
     notes: input.notes,
     description: input.description,
-    billImage: input.billImage,
+    ...(bill ? { billImage: bill } : {}),
   });
   await recomputeAllUserBalances();
   return toDTO(doc);
@@ -153,9 +158,20 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
   if (input.date !== undefined) updates.date = input.date;
   if (input.notes !== undefined) updates.notes = input.notes;
   if (input.description !== undefined) updates.description = input.description;
-  if (input.billImage !== undefined) updates.billImage = input.billImage;
 
-  const doc = await Expense.findByIdAndUpdate(input.id, updates, { new: true }).lean();
+  const unset: Record<string, 1> = {};
+  if (input.billImage !== undefined) {
+    if (input.billImage === null) {
+      unset.billImage = 1;
+    } else {
+      updates.billImage = input.billImage.trim();
+    }
+  }
+
+  const mongoUpdate: Record<string, unknown> =
+    Object.keys(unset).length > 0 ? { $set: updates, $unset: unset } : updates;
+
+  const doc = await Expense.findByIdAndUpdate(input.id, mongoUpdate, { new: true }).lean();
   if (!doc) return null;
   await recomputeAllUserBalances();
   return toDTO({

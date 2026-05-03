@@ -25,8 +25,8 @@ export function MonthSelect({ value, onChange }: Props) {
 
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-10 w-[200px] rounded-xl border bg-background/80 shadow-sm">
-        <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
+      <SelectTrigger className="h-11 min-w-0 max-w-[11rem] flex-1 rounded-xl border bg-background/80 shadow-sm sm:max-w-[13rem] sm:flex-initial md:h-10 md:w-[200px] md:max-w-none">
+        <CalendarDays className="mr-1 h-4 w-4 shrink-0 text-muted-foreground sm:mr-2" />
         <SelectValue placeholder="Month" />
       </SelectTrigger>
       <SelectContent className="rounded-xl">

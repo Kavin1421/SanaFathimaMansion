@@ -19,6 +19,19 @@ function toDTO(u: {
   };
 }
 
+export async function getUserById(id: string): Promise<UserDTO | null> {
+  await connectDb();
+  const u = await User.findById(id).lean();
+  if (!u) return null;
+  return toDTO({
+    _id: u._id,
+    name: u.name,
+    avatar: u.avatar,
+    totalPaid: u.totalPaid,
+    balance: u.balance,
+  });
+}
+
 export async function listUsers(): Promise<UserDTO[]> {
   await connectDb();
   const users = await User.find().sort({ name: 1 }).lean();

@@ -52,7 +52,7 @@ function boldRupee(amount: string | number): string {
   return `*₹${formatAmount(amount)}*`;
 }
 
-/** Premium fintech-style expense / settlement line message (WhatsApp *bold*). */
+/** Premium expense / settlement message for WhatsApp (*bold* + tasteful emojis). */
 export function formatExpenseMessage(data: ExpenseAlertPayload): string {
   const amt = boldRupee(data.amount);
   const variant = data.variant ?? "created";
@@ -60,49 +60,53 @@ export function formatExpenseMessage(data: ExpenseAlertPayload): string {
   if (variant === "settlement") {
     const to = data.settlementToName ?? "?";
     const lines = [
-      `💸 *${data.appName} — Settlement*`,
+      `💸 *${data.appName}*`,
+      "✅ *Settlement recorded*",
       "",
-      `*${data.payerName}* paid ${amt} to *${to}*`,
+      `🤝 *${data.payerName}* → *${to}*`,
+      `💵 Amount: ${amt}`,
       "",
-      `📅 ${data.dateLine}`,
+      `📆 ${data.dateLine}`,
       "",
       DIVIDER,
     ];
     if (data.detailUrl) {
-      lines.push("", "🔗 *Open dashboard*", data.detailUrl);
+      lines.push("", "🔗 *Ledger*", data.detailUrl);
     }
     return lines.join("\n");
   }
 
-  const headerEmoji = data.categoryEmoji || "💸";
-  const headerSuffix = variant === "updated" ? "Expense Updated" : "Expense Update";
-  const header = `${headerEmoji} *${data.appName} — ${headerSuffix}*`;
+  const em = data.categoryEmoji || "💸";
+  const headerSuffix = variant === "updated" ? "✏️ Expense updated" : "✨ New expense";
+  const header = `${em} *${data.appName}*`;
+  const sub = `_${headerSuffix}_`;
 
-  const titleLine = `💸 *${data.title}*`;
-  const paidLine = `*${data.payerName}* paid ${amt}`;
+  const titleLine = `📝 *${data.title}*`;
+  const paidLine = `👤 *${data.payerName}* paid ${amt}`;
 
-  const metaLine = `${data.categoryEmoji} ${data.categoryLabel} • ${data.dateLine}`;
+  const metaLine = `📆 ${em} *${data.categoryLabel}* · ${data.dateLine}`;
 
   let splitBlock: string;
   if (!data.isSplit) {
-    splitBlock = `💼 *House expense*\n👥 Split: *Not applicable*`;
+    splitBlock = `🏠 *House expense*\n👥 Split · *not applicable*`;
   } else if (data.splitCount > 1 && data.splitShareAmount != null) {
-    splitBlock = `👥 *Split ·* ${boldRupee(data.splitShareAmount)} each · ${data.splitCount} people`;
+    splitBlock = `👥 *Shared ·* ${boldRupee(data.splitShareAmount)} each · ${data.splitCount} people`;
   } else {
     splitBlock = `👥 *Split ·* ${data.splitCount} member${data.splitCount === 1 ? "" : "s"}`;
   }
 
-  const walletLines: string[] = ["💰 *Wallet Balance*"];
+  const walletLines: string[] = ["💰 *Wallet balance*"];
   if (data.walletRemaining != null) {
     walletLines.push(`${boldRupee(data.walletRemaining)} remaining`);
   } else if (data.budget != null) {
-    walletLines.push("Track spending in the app");
+    walletLines.push("📋 Track spending in the app");
   } else {
-    walletLines.push("Set a monthly budget in the app");
+    walletLines.push("📋 Set a monthly budget in the app");
   }
 
   const parts: string[] = [
     header,
+    sub,
     "",
     titleLine,
     paidLine,
@@ -121,17 +125,17 @@ export function formatExpenseMessage(data: ExpenseAlertPayload): string {
     const over = pct > 100;
     parts.push(
       over
-        ? `⚠️ Budget usage: *${pct}%* — *over budget*`
-        : `⚠️ Budget usage: *${pct}%* consumed`,
+        ? `⚠️ *Budget ·* ${pct}% used — *over cap*`
+        : `📊 *Budget ·* ${pct}% used`,
     );
   }
 
   if (data.hasBill) {
-    parts.push("", "🧾 Receipt attached below");
+    parts.push("", "🧾 *Receipt* attached below");
   }
 
   if (data.detailUrl) {
-    parts.push("", "🔗 *Open dashboard*", data.detailUrl);
+    parts.push("", "🔗 *Open in app*", data.detailUrl);
   }
 
   return parts.join("\n");
@@ -150,25 +154,39 @@ export function formatMonthResetMessage(data: MonthResetPayload): string {
       ? null
       : carry
         ? "🔁 Balances carry forward as usual."
-        : "📌 Fresh month — check ledger preferences in the app.";
+        : "📌 Fresh month — check preferences in the app.";
 
   const lines = [
-    `📅 *${data.appName} — New month*`,
+    `📅 *${data.appName}*`,
+    "🌙 *New month started*",
     "",
-    `*${data.monthLabel}*`,
+    `✨ *${data.monthLabel}*`,
     `💰 Monthly wallet: ${b}`,
     "",
     DIVIDER,
   ];
   if (carryLine) lines.push("", carryLine);
   if (data.detailUrl) {
-    lines.push("", "🔗 *Open dashboard*", data.detailUrl);
+    lines.push("", "🔗 *Open in app*", data.detailUrl);
   }
   return lines.join("\n");
 }
 
-export async function sendExpenseMessage(chat: Chat, data: ExpenseAlertPayload): Promise<void> {
-  await chat.sendMessage(formatExpenseMessage(data));
+const WHATSAPP_CAPTION_MAX = 1024;
+
+export type ExpenseSendPayload = ExpenseAlertPayload & { imageUrl?: string };
+
+export async function sendExpenseMessage(chat: Chat, data: ExpenseSendPayload): Promise<void> {
+  const { imageUrl, ...alert } = data;
+  const text = formatExpenseMessage({ ...alert, hasBill: imageUrl ? false : alert.hasBill });
+  if (imageUrl?.trim()) {
+    const caption =
+      text.length > WHATSAPP_CAPTION_MAX ? `${text.slice(0, WHATSAPP_CAPTION_MAX - 1)}…` : text;
+    const media = await wweb.MessageMedia.fromUrl(imageUrl.trim(), { unsafeMime: true });
+    await chat.sendMessage(media, { caption });
+    return;
+  }
+  await chat.sendMessage(text);
 }
 
 export async function sendWalletMessage(chat: Chat, data: WalletPayload): Promise<void> {

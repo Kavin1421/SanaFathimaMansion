@@ -3,14 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
+import { performerFromSession, toAuditJson } from "@/lib/audit-helper";
+import { isAdminSession } from "@/lib/admin";
 import {
   createUserSchema,
   updateUserSchema,
   type CreateUserInput,
   type UpdateUserInput,
 } from "@/lib/validation";
-import { isAdminSession } from "@/lib/admin";
-import { createUser, deleteUser, updateUser } from "@/services/users";
+import { appendAuditLog } from "@/services/audit-log";
+import { createUser, deleteUser, getUserById, updateUser } from "@/services/users";
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -46,18 +48,31 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionRe
     return { ok: false, error: "Unauthorized" };
   }
   if (!isAdminSession(session)) {
-    return { ok: false, error: "Only an admin can edit roommates" };
+    return { ok: false, error: "Only a super admin can edit roommates" };
   }
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
   }
   try {
+    const before = await getUserById(parsed.data.id);
     const data = await updateUser(parsed.data);
     if (!data) return { ok: false, error: "User not found" };
+    try {
+      await appendAuditLog({
+        actionType: "UPDATE_USER",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: data._id, label: data.name },
+        previousValue: toAuditJson(before),
+        newValue: toAuditJson(data),
+      });
+    } catch (e) {
+      console.error("[audit] update user", e);
+    }
     revalidatePath("/dashboard");
     revalidatePath("/users");
     revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
     return { ok: true, data };
   } catch (e) {
     console.error(e);
@@ -71,14 +86,26 @@ export async function deleteUserAction(id: string): Promise<ActionResult<null>> 
     return { ok: false, error: "Unauthorized" };
   }
   if (!isAdminSession(session)) {
-    return { ok: false, error: "Only an admin can remove roommates" };
+    return { ok: false, error: "Only a super admin can remove roommates" };
   }
   try {
+    const before = await getUserById(id);
     const res = await deleteUser(id);
     if (!res.ok) return { ok: false, error: res.error ?? "Delete failed" };
+    try {
+      await appendAuditLog({
+        actionType: "DELETE_USER",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id, label: before?.name },
+        previousValue: toAuditJson(before),
+      });
+    } catch (e) {
+      console.error("[audit] delete user", e);
+    }
     revalidatePath("/dashboard");
     revalidatePath("/users");
     revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
     return { ok: true, data: null };
   } catch (e) {
     console.error(e);
