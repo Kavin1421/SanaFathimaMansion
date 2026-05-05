@@ -9,6 +9,14 @@ export function performerFromSession(session: Session): AuditPerformedBy {
   };
 }
 
+export function performerAnonymous(name = "Anonymous"): AuditPerformedBy {
+  return {
+    accountId: "anonymous",
+    email: "",
+    name,
+  };
+}
+
 export function toAuditJson(value: unknown): Record<string, unknown> | null {
   if (value === undefined || value === null) return null;
   try {

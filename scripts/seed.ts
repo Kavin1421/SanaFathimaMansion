@@ -134,10 +134,10 @@ async function seedFull() {
   });
 
   const users = await User.insertMany([
-    { name: "Kevin", totalPaid: 0, balance: 0 },
-    { name: "Dilip", totalPaid: 0, balance: 0 },
-    { name: "Fathima", totalPaid: 0, balance: 0 },
-    { name: "Arun", totalPaid: 0, balance: 0 },
+    { name: "Kevin", email: "kevin@sana.local", status: "active", totalPaid: 0, balance: 0 },
+    { name: "Dilip", email: "dilip@sana.local", status: "active", totalPaid: 0, balance: 0 },
+    { name: "Fathima", email: "fathima@sana.local", status: "active", totalPaid: 0, balance: 0 },
+    { name: "Arun", email: "arun@sana.local", status: "active", totalPaid: 0, balance: 0 },
   ]);
 
   const [kevin, dilip, fathima, arun] = users;

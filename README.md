@@ -81,6 +81,12 @@ When enabled, `WHATSAPP_BOT_URL` and `WHATSAPP_BOT_API_KEY` must also be set or 
 
 See `whatsapp-bot/` for QR login, group id, and bot env.
 
+## Engagement cron endpoints
+
+- `POST /api/cron/reminders` — daily reminders for users with negative balance (email + WhatsApp group summary)
+- `POST /api/cron/monthly-summary` — month-end broadcast of totals/top spender/remaining budget
+- Both endpoints require header `x-cron-secret: <CRON_SECRET>`
+
 ## Project layout (sketch)
 
 - `app/(marketing)/` — landing
@@ -96,7 +102,7 @@ See `whatsapp-bot/` for QR login, group id, and bot env.
 ## Product notes (household finance)
 
 - **House expense** (`splitEnabled: false`): counts toward the monthly wallet total but does **not** change ledger user balances (no IOU movement).
-- **Super admin** (email-based): `SUPER_ADMIN_EMAIL` (default `kavinkumar24@gmail.com`) can edit/delete any expense, edit/delete ledger users, set monthly budget, start new month (WhatsApp reset), balance override, and open **Audit logs**. JWT/session expose `isSuperAdmin` for UI; re-login after deploy picks up new claims. Any authenticated user can still **create** expenses and **add** roommates for onboarding.
+- **Super admin** (email-based): `SUPER_ADMIN_EMAIL` (default `kavinkumar24@gmail.com`) can edit/delete any expense, invite/edit/delete ledger users, set monthly budget, start new month (WhatsApp reset), balance override, and open **Audit logs**. Invites require `name + email`, create users with `status: invited`, and send styled HTML email when `EMAIL_USER` / `EMAIL_PASSWORD` are configured. On sign-in with a matching email, the ledger user is auto-activated (`status: active`) and linked to the account.
 - **Audit logs**: append-only `AuditLog` collection (expense create/update/delete, budget, month reset, user changes, balance override, sign-in). `/audit-logs` and `GET /api/audit-logs` are super-admin only.
 - **Expense images**: the client uploads to `/api/upload` first, then saves the expense with the Cloudinary URL; WhatsApp notifications run asynchronously and failures are logged only (they do not roll back the expense).
 - **Balance override**: direct `User.balance` changes may be overwritten the next time balances are recomputed from expenses; treat as a temporary adjustment unless you add durable override bookkeeping.

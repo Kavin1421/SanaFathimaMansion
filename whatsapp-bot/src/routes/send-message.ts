@@ -5,6 +5,7 @@ import {
   sendBillImage,
   sendExpenseMessage,
   sendMonthResetMessage,
+  sendTextMessage,
   sendWalletMessage,
 } from "../senders.js";
 import { getTargetChat, isClientReady, waitUntilReady } from "../whatsapp.js";
@@ -54,11 +55,17 @@ const monthResetBody = z.object({
   carryForwardBalances: z.boolean().optional(),
 });
 
+const textBody = z.object({
+  type: z.literal("text"),
+  text: z.string().min(1),
+});
+
 const bodySchema = z.discriminatedUnion("type", [
   expenseBody,
   walletBody,
   billBody,
   monthResetBody,
+  textBody,
 ]);
 
 function requireBotKey(req: Request, res: Response): boolean {
@@ -112,6 +119,8 @@ export function sendMessageRouter(): Router {
         await sendWalletMessage(chat, payload);
       } else if (payload.type === "month_reset") {
         await sendMonthResetMessage(chat, payload);
+      } else if (payload.type === "text") {
+        await sendTextMessage(chat, payload);
       } else {
         await sendBillImage(chat, payload);
       }

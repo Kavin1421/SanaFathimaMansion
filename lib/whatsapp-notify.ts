@@ -56,6 +56,12 @@ async function post(body: Record<string, unknown>): Promise<void> {
   }
 }
 
+export function notifyWhatsAppText(text: string): void {
+  if (!text.trim()) return;
+  if (!isWhatsAppBotEnabled()) return;
+  void post({ type: "text", text: text.trim() });
+}
+
 /**
  * Fire-and-forget: posts expense alert (+ optional bill image) to the WhatsApp group
  * configured on the bot (WHATSAPP_GROUP_ID). No-op if disabled, or URL/key missing.

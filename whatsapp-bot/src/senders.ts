@@ -35,6 +35,10 @@ export type BillImagePayload = {
   caption: string;
 };
 
+export type TextPayload = {
+  text: string;
+};
+
 export type MonthResetPayload = {
   appName: string;
   monthKey: string;
@@ -200,4 +204,8 @@ export async function sendMonthResetMessage(chat: Chat, data: MonthResetPayload)
 export async function sendBillImage(chat: Chat, data: BillImagePayload): Promise<void> {
   const media = await wweb.MessageMedia.fromUrl(data.imageUrl, { unsafeMime: true });
   await chat.sendMessage(media, { caption: data.caption });
+}
+
+export async function sendTextMessage(chat: Chat, data: TextPayload): Promise<void> {
+  await chat.sendMessage(data.text);
 }

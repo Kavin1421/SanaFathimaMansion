@@ -104,7 +104,7 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
                   })
                 }
               >
-                Settle now
+                Mark as Settled
               </Button>
             </li>
           ))}

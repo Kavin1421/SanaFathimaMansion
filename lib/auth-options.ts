@@ -4,6 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { connectDb } from "@/lib/db";
 import { Account } from "@/models/Account";
+import { User } from "@/models/User";
 import { superAdminEmail } from "@/lib/super-admin";
 
 const googleConfigured =
@@ -70,6 +71,7 @@ export const authOptions: NextAuthOptions = {
         const email = user.email.toLowerCase();
         let acc = await Account.findOne({ email });
         if (!acc) {
+          const invited = await User.findOne({ email }).select("_id").lean();
           acc = await Account.create({
             email,
             name: user.name ?? email.split("@")[0],
@@ -77,6 +79,7 @@ export const authOptions: NextAuthOptions = {
             googleId: account.providerAccountId,
             onboardingCompleted: false,
             role: "user",
+            ...(invited?._id ? { ledgerUserId: invited._id } : {}),
           });
         } else {
           if (!acc.googleId) acc.googleId = account.providerAccountId;
@@ -127,6 +130,20 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signIn({ user }) {
       try {
+        const email = (user as { email?: string }).email?.toLowerCase().trim();
+        if (email) {
+          await connectDb();
+          const invited = await User.findOneAndUpdate(
+            { email },
+            { $set: { status: "active", activatedAt: new Date() } },
+            { new: true },
+          ).lean();
+          if (invited && user.id) {
+            await Account.findByIdAndUpdate(user.id, {
+              $set: { ledgerUserId: invited._id },
+            });
+          }
+        }
         const { appendAuditLog } = await import("@/services/audit-log");
         await appendAuditLog({
           actionType: "LOGIN",

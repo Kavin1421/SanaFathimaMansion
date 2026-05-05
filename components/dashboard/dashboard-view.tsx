@@ -12,6 +12,7 @@ import { OwesList } from "@/components/dashboard/owes-list";
 import { SpendChart } from "@/components/dashboard/spend-chart";
 import { UserBarChart } from "@/components/dashboard/user-bar-chart";
 import { WalletCard } from "@/components/dashboard/wallet-card";
+import { YourBalanceCard } from "@/components/dashboard/your-balance-card";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { queryKeys } from "@/lib/query-keys";
@@ -63,6 +64,8 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
       <div className="col-span-12">
         <PersonalBalanceHint summary={s} />
       </div>
+
+      <YourBalanceCard summary={s} />
 
       <WalletCard summary={s} />
 

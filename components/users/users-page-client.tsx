@@ -50,18 +50,20 @@ export function UsersPageClient() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<UserDTO | null>(null);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [avatar, setAvatar] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error("Name required");
+      if (!email.trim()) throw new Error("Email required");
       if (editing) {
-        const r = await updateUserAction({ id: editing._id, name: name.trim(), avatar });
+        const r = await updateUserAction({ id: editing._id, name: name.trim(), email: email.trim(), avatar });
         if (!r.ok) throw new Error(r.error);
         return r.data;
       }
-      const r = await createUserAction({ name: name.trim(), avatar });
+      const r = await createUserAction({ name: name.trim(), email: email.trim(), avatar });
       if (!r.ok) throw new Error(r.error);
       return r.data;
     },
@@ -94,6 +96,7 @@ export function UsersPageClient() {
   function openCreate() {
     setEditing(null);
     setName("");
+    setEmail("");
     setAvatar("");
     setDialogOpen(true);
   }
@@ -101,6 +104,7 @@ export function UsersPageClient() {
   function openEdit(u: UserDTO) {
     setEditing(u);
     setName(u.name);
+    setEmail(u.email);
     setAvatar(u.avatar ?? "");
     setDialogOpen(true);
   }
@@ -112,10 +116,12 @@ export function UsersPageClient() {
           <h2 className="text-2xl font-semibold tracking-tight">Roommates</h2>
           <p className="text-sm text-muted-foreground">Balances update from the shared ledger</p>
         </div>
-        <Button className="rounded-xl gap-1" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Add roommate
-        </Button>
+        {isSuperAdmin ? (
+          <Button className="rounded-xl gap-1" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Invite roommate
+          </Button>
+        ) : null}
       </div>
 
       {isLoading ? (
@@ -136,7 +142,7 @@ export function UsersPageClient() {
                   </Avatar>
                   <div>
                     <CardTitle className="text-lg">{u.name}</CardTitle>
-                    <CardDescription>Total paid · {formatInr(u.totalPaid)}</CardDescription>
+                    <CardDescription>{u.email}</CardDescription>
                   </div>
                 </div>
                 {isSuperAdmin ? (
@@ -157,11 +163,19 @@ export function UsersPageClient() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3">
-                  <span className="text-sm text-muted-foreground">Balance</span>
-                  <Badge variant={u.balance > 0 ? "success" : u.balance < 0 ? "danger" : "secondary"}>
-                    {u.balance > 0 ? "+" : ""}
-                    {formatInr(u.balance)}
-                  </Badge>
+                  <div className="flex flex-col">
+                    <span className="text-sm text-muted-foreground">Balance</span>
+                    <span className="text-xs text-muted-foreground">Total paid · {formatInr(u.totalPaid)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={u.balance > 0 ? "success" : u.balance < 0 ? "danger" : "secondary"}>
+                      {u.balance > 0 ? "+" : ""}
+                      {formatInr(u.balance)}
+                    </Badge>
+                    <Badge variant={u.status === "active" ? "success" : "secondary"} className="capitalize">
+                      {u.status}
+                    </Badge>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -172,7 +186,7 @@ export function UsersPageClient() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit roommate" : "New roommate"}</DialogTitle>
+            <DialogTitle>{editing ? "Edit roommate" : "Invite roommate"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="space-y-2">
@@ -183,6 +197,17 @@ export function UsersPageClient() {
                 onChange={(e) => setName(e.target.value)}
                 className="rounded-xl"
                 placeholder="Kevin"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="uemail">Email</Label>
+              <Input
+                id="uemail"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rounded-xl"
+                placeholder="roommate@email.com"
               />
             </div>
             <div className="space-y-2">

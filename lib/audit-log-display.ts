@@ -6,8 +6,15 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   CREATE_EXPENSE: "Expense created",
   UPDATE_EXPENSE: "Expense updated",
   DELETE_EXPENSE: "Expense deleted",
+  CREATE_USER: "User invited",
+  CREATE_SETTLEMENT: "Settlement recorded",
+  ACCESS_DENIED: "Access denied",
+  VALIDATION_FAILED: "Validation failed",
+  ACTION_FAILED: "Action failed",
   RESET_MONTH: "Month reset",
   LOGIN: "Signed in",
+  COMPLETE_ONBOARDING: "Onboarding completed",
+  UPDATE_HOUSE: "House updated",
   UPDATE_BUDGET: "Budget updated",
   UPDATE_USER: "User updated",
   DELETE_USER: "User deleted",
@@ -18,6 +25,9 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   session: "Session",
   user: "User",
   house_month: "Month",
+  house: "House",
+  onboarding: "Onboarding",
+  settlement: "Settlement",
   budget: "Budget",
 };
 
@@ -59,6 +69,20 @@ export function auditLogSummaryLine(row: AuditLogRow): string {
     }
     case "LOGIN":
       return "Session started";
+    case "CREATE_SETTLEMENT":
+      return targetEntity.label?.trim() || "Settlement completed";
+    case "ACCESS_DENIED":
+      return "Blocked by permissions";
+    case "VALIDATION_FAILED":
+      return "Input validation failed";
+    case "ACTION_FAILED":
+      return "Operation failed";
+    case "COMPLETE_ONBOARDING":
+      return "Setup finished";
+    case "UPDATE_HOUSE":
+      return newValue?.displayName != null && typeof newValue.displayName === "string"
+        ? `House name set to ${newValue.displayName}`
+        : "House settings updated";
     case "RESET_MONTH":
       return newValue?.monthKey != null && typeof newValue.monthKey === "string"
         ? `Reset ${newValue.monthKey}`
@@ -68,6 +92,7 @@ export function auditLogSummaryLine(row: AuditLogRow): string {
         ? `Budget set to ${formatInr(newValue.budget)}`
         : "Budget changed";
     case "UPDATE_USER":
+    case "CREATE_USER":
     case "DELETE_USER":
       return targetEntity.label?.trim() || (previousValue?.email as string) || (newValue?.email as string) || fallback;
     default:

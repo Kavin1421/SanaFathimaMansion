@@ -27,11 +27,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CATEGORY_META, EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
 import { cn, formatInr } from "@/lib/utils";
+import { buildWhatsAppShareUrl, shareTextNative } from "@/lib/whatsapp";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
-import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, Share2, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -114,6 +115,20 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   function openView(e: ExpenseDTO) {
     setViewing(e);
     setDetailOpen(true);
+  }
+
+  async function shareExpense(e: ExpenseDTO) {
+    const payer = userMap.get(e.paidBy) ?? "Someone";
+    const text = [
+      `Expense: ${e.title}`,
+      `Amount: ${formatInr(e.amount)}`,
+      `Category: ${e.category}`,
+      `Paid by: ${payer}`,
+      `Date: ${new Date(e.date).toLocaleDateString()}`,
+    ].join("\n");
+    const ok = await shareTextNative(text, "Expense details");
+    if (ok) return toast.success("Expense shared");
+    window.open(buildWhatsAppShareUrl(text), "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -241,6 +256,15 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                           >
                             <Eye className="mr-1 h-4 w-4" />
                             View
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl"
+                            onClick={() => shareExpense(e)}
+                          >
+                            <Share2 className="h-4 w-4" />
                           </Button>
                           {isSuperAdmin ? (
                             <>

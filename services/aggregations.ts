@@ -188,6 +188,18 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
     name: u.name,
     share: roundMoney(shareByUser[u._id.toString()] ?? 0),
   }));
+  const personalBalances = users.map((u) => {
+    const userId = u._id.toString();
+    const totalPaid = roundMoney(paidByMonth[userId] ?? 0);
+    const totalOwed = roundMoney(shareByUser[userId] ?? 0);
+    return {
+      userId,
+      name: u.name,
+      totalPaid,
+      totalOwed,
+      netBalance: roundMoney(totalPaid - totalOwed),
+    };
+  });
 
   const previousMonthTotal = roundMoney(prevMonthExpenses.reduce((s, e) => s + e.amount, 0));
   let percentChangeVsPrevious: number | undefined;
@@ -203,6 +215,13 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
     }
   } else if (totalSpent > 0 && previousMonthTotal === 0) {
     insight = "No expenses recorded for the previous month.";
+  }
+  const dominantCategory = [...categoryBreakdown].sort((a, b) => b.total - a.total)[0];
+  if (dominantCategory && dominantCategory.total > 0) {
+    const sharePct = roundMoney((dominantCategory.total / totalSpent) * 100);
+    insight = insight
+      ? `${insight} ${dominantCategory.category} dominated at ${sharePct}% of spend.`
+      : `${dominantCategory.category} dominated at ${sharePct}% of spend.`;
   }
 
   const winnerEntries = Object.entries(paidByMonth).sort((a, b) => b[1] - a[1]);
@@ -292,6 +311,7 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
     insight,
     pendingBalanceMagnitude: pendingImbalanceMagnitude(balances),
     balances: balanceRows,
+    personalBalances,
     suggestions,
     recentExpenses,
     recentExpensesDetailed,

@@ -5,6 +5,8 @@ export type { ExpenseCategory };
 export type UserDTO = {
   _id: string;
   name: string;
+  email: string;
+  status: "invited" | "active" | "disabled";
   avatar?: string;
   totalPaid: number;
   balance: number;
@@ -76,6 +78,7 @@ export type MonthlySummary = {
   insight?: string;
   pendingBalanceMagnitude: number;
   balances: { userId: string; name: string; balance: number }[];
+  personalBalances: { userId: string; name: string; totalPaid: number; totalOwed: number; netBalance: number }[];
   suggestions: SettlementSuggestion[];
   recentExpenses: ExpenseDTO[];
   recentExpensesDetailed: RecentExpenseRow[];

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { performerFromSession, toAuditJson } from "@/lib/audit-helper";
+import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { isAdminSession } from "@/lib/admin";
 import { connectDb } from "@/lib/db";
 import { User } from "@/models/User";
@@ -19,12 +19,34 @@ export async function adminOverrideBalanceAction(
 ): Promise<ActionResult<null>> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
+    try {
+      await appendAuditLog({
+        actionType: "ACCESS_DENIED",
+        performedBy: performerAnonymous(),
+        targetEntity: { type: "user", id: userId, label: "adminOverrideBalanceAction" },
+      });
+    } catch {}
     return { ok: false, error: "Unauthorized" };
   }
   if (!isAdminSession(session)) {
+    try {
+      await appendAuditLog({
+        actionType: "ACCESS_DENIED",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: userId, label: "adminOverrideBalanceAction" },
+      });
+    } catch {}
     return { ok: false, error: "Super admin only" };
   }
   if (!Number.isFinite(balance)) {
+    try {
+      await appendAuditLog({
+        actionType: "VALIDATION_FAILED",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: userId, label: "adminOverrideBalanceAction" },
+        newValue: toAuditJson({ balance, totalPaid }),
+      });
+    } catch {}
     return { ok: false, error: "Invalid balance" };
   }
   try {
@@ -59,6 +81,14 @@ export async function adminOverrideBalanceAction(
     return { ok: true, data: null };
   } catch (e) {
     console.error(e);
+    try {
+      await appendAuditLog({
+        actionType: "ACTION_FAILED",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: userId, label: "adminOverrideBalanceAction" },
+        newValue: toAuditJson({ error: e instanceof Error ? e.message : "unknown" }),
+      });
+    } catch {}
     return { ok: false, error: "Could not update balance" };
   }
 }

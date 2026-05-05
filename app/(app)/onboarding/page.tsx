@@ -14,7 +14,7 @@ export default function OnboardingPage() {
   const { status, update } = useSession();
   const [step, setStep] = useState(1);
   const [houseName, setHouseName] = useState("");
-  const [members, setMembers] = useState<string[]>([""]);
+  const [members, setMembers] = useState<{ name: string; email: string }[]>([{ name: "", email: "" }]);
   const [loadingHouse, setLoadingHouse] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -66,12 +66,12 @@ export default function OnboardingPage() {
     }
   }
 
-  function setMemberAt(i: number, value: string) {
-    setMembers((prev) => prev.map((m, idx) => (idx === i ? value : m)));
+  function setMemberAt(i: number, key: "name" | "email", value: string) {
+    setMembers((prev) => prev.map((m, idx) => (idx === i ? { ...m, [key]: value } : m)));
   }
 
   function addMemberRow() {
-    setMembers((prev) => [...prev, ""]);
+    setMembers((prev) => [...prev, { name: "", email: "" }]);
   }
 
   function removeMemberRow(i: number) {
@@ -79,11 +79,17 @@ export default function OnboardingPage() {
   }
 
   async function finishOnboarding() {
-    const names = members.map((m) => m.trim()).filter(Boolean);
+    const rows = members
+      .map((m) => ({ name: m.name.trim(), email: m.email.trim() }))
+      .filter((m) => m.name.length > 0 || m.email.length > 0);
     setSaving(true);
     try {
-      for (const name of names) {
-        const res = await createUserAction({ name });
+      for (const row of rows) {
+        if (!row.name || !row.email) {
+          toast.error("Each roommate needs name and email");
+          return;
+        }
+        const res = await createUserAction({ name: row.name, email: row.email });
         if (!res.ok) {
           toast.error(res.error);
           return;
@@ -152,13 +158,21 @@ export default function OnboardingPage() {
           </p>
           <div className="mt-6 space-y-4">
             {members.map((m, i) => (
-              <div key={i} className="flex gap-2">
+              <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                 <Input
-                  value={m}
-                  onChange={(e) => setMemberAt(i, e.target.value)}
+                  value={m.name}
+                  onChange={(e) => setMemberAt(i, "name", e.target.value)}
                   placeholder="Name"
                   className="rounded-xl"
-                  aria-label={`Roommate ${i + 1}`}
+                  aria-label={`Roommate name ${i + 1}`}
+                />
+                <Input
+                  value={m.email}
+                  type="email"
+                  onChange={(e) => setMemberAt(i, "email", e.target.value)}
+                  placeholder="Email"
+                  className="rounded-xl"
+                  aria-label={`Roommate email ${i + 1}`}
                 />
                 {members.length > 1 ? (
                   <Button type="button" variant="outline" onClick={() => removeMemberRow(i)}>
