@@ -121,6 +121,14 @@ const expenseFields = {
 export const expenseBaseSchema = z
   .object(expenseFields)
   .superRefine((data, ctx) => {
+    const description = String(data.description ?? "").trim();
+    if (description && !/[A-Za-z]/.test(description)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Description should contain words, not only numbers/symbols",
+        path: ["description"],
+      });
+    }
     if (data.category === "Others" && !String(data.description ?? "").trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -153,6 +161,16 @@ export const updateExpenseSchema = z
   .partial()
   .extend({ id: objectIdString })
   .superRefine((data, ctx) => {
+    if (data.description !== undefined) {
+      const description = String(data.description).trim();
+      if (description && !/[A-Za-z]/.test(description)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Description should contain words, not only numbers/symbols",
+          path: ["description"],
+        });
+      }
+    }
     if (data.category === "Others" && data.description !== undefined && !String(data.description).trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

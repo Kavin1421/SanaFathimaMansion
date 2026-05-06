@@ -22,6 +22,14 @@ const expenseBody = z.object({
   isSplit: z.boolean(),
   splitCount: z.number().int().nonnegative(),
   splitShareAmount: z.number().nullable().optional(),
+  splitMembers: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        amount: z.union([z.number(), z.string()]),
+      }),
+    )
+    .optional(),
   walletRemaining: z.number().nullable(),
   budget: z.number().nullable(),
   budgetUsagePercent: z.number().nullable(),

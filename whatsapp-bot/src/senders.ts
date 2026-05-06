@@ -16,6 +16,7 @@ export type ExpenseAlertPayload = {
   splitCount: number;
   /** Per-person share when split among multiple members */
   splitShareAmount?: number | null;
+  splitMembers?: { name: string; amount: string | number }[];
   walletRemaining: number | null;
   budget: number | null;
   budgetUsagePercent: number | null;
@@ -94,7 +95,15 @@ export function formatExpenseMessage(data: ExpenseAlertPayload): string {
   if (!data.isSplit) {
     splitBlock = `🏠 *House expense*\n👥 Split · *not applicable*`;
   } else if (data.splitCount > 1 && data.splitShareAmount != null) {
-    splitBlock = `👥 *Shared ·* ${boldRupee(data.splitShareAmount)} each · ${data.splitCount} people`;
+    const memberLines =
+      data.splitMembers && data.splitMembers.length > 0
+        ? data.splitMembers
+            .map((m) => `• ${m.name}: ${boldRupee(m.amount)}`)
+            .join("\n")
+        : null;
+    splitBlock = memberLines
+      ? `👥 *Shared split details*\n${memberLines}`
+      : `👥 *Shared ·* ${boldRupee(data.splitShareAmount)} each · ${data.splitCount} people`;
   } else {
     splitBlock = `👥 *Split ·* ${data.splitCount} member${data.splitCount === 1 ? "" : "s"}`;
   }

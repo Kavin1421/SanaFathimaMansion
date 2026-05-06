@@ -2,6 +2,7 @@
 
 import { addExpenseCommentAction, toggleExpenseReactionAction } from "@/app/actions/expenses";
 import { BillImagePanel } from "@/components/bill-image-panel";
+import { CategoryIcon } from "@/components/icons/category-icon";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,11 +11,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { CATEGORY_META, type ExpenseCategory } from "@/lib/constants";
+import type { ExpenseCategory } from "@/lib/constants";
 import { formatInr } from "@/lib/utils";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { roundMoney } from "@/lib/ledger";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, Flame, ThumbsUp, Wallet } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -29,7 +31,6 @@ type Props = {
 function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] }) {
   const userMap = new Map(users.map((u) => [u._id, u.name]));
   const cat = expense.category as ExpenseCategory;
-  const meta = CATEGORY_META[cat];
   const splitNames = expense.splitBetween.map((id) => userMap.get(id) ?? id).join(", ");
   const share =
     expense.splitEnabled !== false && expense.splitBetween.length > 0
@@ -38,7 +39,15 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
   const qc = useQueryClient();
   const { data: session } = useSession();
   const [comment, setComment] = useState("");
-  const emojiOptions = useMemo(() => ["👍", "🔥", "💸", "✅"], []);
+  const reactionOptions = useMemo(
+    () => [
+      { value: "👍", Icon: ThumbsUp },
+      { value: "🔥", Icon: Flame },
+      { value: "💸", Icon: Wallet },
+      { value: "✅", Icon: Check },
+    ],
+    [],
+  );
   const comments = useMemo(() => expense.comments ?? [], [expense.comments]);
   const reactions = useMemo(() => expense.reactions ?? [], [expense.reactions]);
   const myAccountId = session?.user?.id;
@@ -79,8 +88,8 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
     <div className="space-y-5 py-1 text-sm">
       <div className="grid gap-1 border-b pb-4">
         <p className="text-2xl font-semibold tabular-nums">{formatInr(expense.amount)}</p>
-        <p className="text-muted-foreground">
-          <span className="mr-1">{meta.emoji}</span>
+        <p className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <CategoryIcon category={cat} className="h-4 w-4" />
           {expense.category} · Paid by {userMap.get(expense.paidBy) ?? "?"}
         </p>
         <p className="text-muted-foreground">{new Date(expense.date).toLocaleDateString(undefined, { dateStyle: "long" })}</p>
@@ -91,7 +100,7 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
           <p>House expense — balances unchanged</p>
         ) : (
           <>
-            <p>{splitNames}</p>
+            <p className="break-words">{splitNames}</p>
             {share != null && expense.splitBetween.length > 1 ? (
               <p className="text-muted-foreground">
                 Each member owes {formatInr(share)} ({expense.splitBetween.length} people)
@@ -115,19 +124,20 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
       <div className="space-y-3 border-t pt-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reactions</p>
         <div className="flex flex-wrap gap-2">
-          {emojiOptions.map((emoji) => {
-            const mine = reactions.some((r) => r.accountId === myAccountId && r.emoji === emoji);
+          {reactionOptions.map(({ value, Icon }) => {
+            const mine = reactions.some((r) => r.accountId === myAccountId && r.emoji === value);
             return (
               <Button
-                key={emoji}
+                key={value}
                 type="button"
                 size="sm"
                 variant={mine ? "default" : "outline"}
-                className="rounded-xl"
-                onClick={() => reactionMut.mutate(emoji)}
+                className="h-9 rounded-xl"
+                onClick={() => reactionMut.mutate(value)}
                 disabled={reactionMut.isPending}
               >
-                {emoji} {groupedReactions.get(emoji) ?? 0}
+                <Icon className="mr-1 h-4 w-4" />
+                {groupedReactions.get(value) ?? 0}
               </Button>
             );
           })}
@@ -154,7 +164,7 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            className="min-h-[84px] w-full rounded-xl border bg-background px-3 py-2 text-sm"
+            className="min-h-[96px] w-full rounded-xl border bg-background px-3 py-2 text-sm"
             placeholder="Add comment..."
           />
           <div className="flex justify-end">

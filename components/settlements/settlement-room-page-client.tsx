@@ -123,8 +123,8 @@ export function SettlementRoomPageClient() {
   const recentSettlements = settlementsQ.data.slice(0, 20);
 
   return (
-    <div className="grid gap-6">
-      <Card className="rounded-2xl p-6">
+    <div className="grid gap-5 md:gap-6">
+      <Card className="rounded-2xl p-5 md:p-6">
         <h2 className="text-lg font-semibold">Pending suggestions</h2>
         <p className="mt-1 text-sm text-muted-foreground">Mark paid or propose a split adjustment.</p>
         <div className="mt-4 space-y-3">
@@ -133,14 +133,14 @@ export function SettlementRoomPageClient() {
           ) : (
             suggestions.map((s, i) => (
               <div key={`${s.fromUserId}-${s.toUserId}-${i}`} className="rounded-xl border p-3">
-                <p className="text-sm">
+                <p className="text-sm leading-relaxed">
                   <span className="font-semibold">{s.fromName}</span> owes <span className="font-semibold">{s.toName}</span>{" "}
                   <span className="font-semibold">{formatInr(s.amount)}</span>
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button
                     size="sm"
-                    className="rounded-xl"
+                    className="h-9 rounded-xl"
                     onClick={() => settleMut.mutate({ fromUser: s.fromUserId, toUser: s.toUserId, amount: s.amount })}
                     disabled={settleMut.isPending}
                   >
@@ -149,7 +149,7 @@ export function SettlementRoomPageClient() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-xl"
+                    className="h-9 rounded-xl"
                     onClick={() => {
                       setProposalTarget(s);
                       setProposalAmount(String(s.amount));
@@ -166,7 +166,7 @@ export function SettlementRoomPageClient() {
         </div>
       </Card>
 
-      <Card className="rounded-2xl p-6">
+      <Card className="rounded-2xl p-5 md:p-6">
         <h2 className="text-lg font-semibold">Status timeline</h2>
         <p className="mt-1 text-sm text-muted-foreground">Proposed {"->"} Paid {"->"} Confirmed</p>
         <div className="mt-4 space-y-3">
@@ -175,7 +175,7 @@ export function SettlementRoomPageClient() {
           ) : (
             recentSettlements.map((s) => (
               <div key={s._id} className="rounded-xl border p-3">
-                <p className="text-sm">
+                <p className="text-sm leading-relaxed">
                   {userMap.get(s.fromUser) ?? "Unknown"} {"->"} {userMap.get(s.toUser) ?? "Unknown"} · {formatInr(s.amount)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -185,7 +185,7 @@ export function SettlementRoomPageClient() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="mt-2 rounded-xl"
+                    className="mt-2 h-9 rounded-xl"
                     onClick={() => confirmMut.mutate(s._id)}
                     disabled={confirmMut.isPending}
                   >
@@ -213,11 +213,11 @@ export function SettlementRoomPageClient() {
               <Input value={proposalText} onChange={(e) => setProposalText(e.target.value)} placeholder="Optional context" />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setProposalOpen(false)}>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" className="h-10 rounded-xl" onClick={() => setProposalOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="rounded-xl" onClick={() => proposalMut.mutate()} disabled={proposalMut.isPending}>
+            <Button type="button" className="h-10 rounded-xl" onClick={() => proposalMut.mutate()} disabled={proposalMut.isPending}>
               Send proposal
             </Button>
           </DialogFooter>

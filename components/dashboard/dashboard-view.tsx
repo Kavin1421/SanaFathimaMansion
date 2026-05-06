@@ -58,7 +58,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
   const summaryText = buildSummaryText(s);
 
   return (
-    <div className="grid grid-cols-12 gap-6 sm:gap-8 md:gap-10">
+    <div className="grid grid-cols-12 gap-5 sm:gap-7 md:gap-9">
       <DashboardHeader summary={s} summaryText={summaryText} monthKey={monthKey} />
 
       <div className="col-span-12">
@@ -75,7 +75,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
 
       <NotificationsStack summary={s} />
 
-      <section className="dashboard-surface col-span-12 p-6 md:p-8">
+      <section className="dashboard-surface col-span-12 p-5 md:p-8">
         <div className="mb-6">
           <h3 className="text-lg font-semibold tracking-tight">Spend trend</h3>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -85,7 +85,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
         <SpendChart data={s.dailySpend} />
       </section>
 
-      <section className="dashboard-surface col-span-12 p-6 md:col-span-6 md:p-8">
+      <section className="dashboard-surface col-span-12 p-5 md:col-span-6 md:p-8">
         <div className="mb-6">
           <h3 className="text-lg font-semibold tracking-tight">Category split</h3>
           <p className="mt-1 text-sm text-muted-foreground">Share of spending by category</p>
@@ -93,7 +93,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
         <CategoryDonut data={s.categoryBreakdown} />
       </section>
 
-      <section className="dashboard-surface col-span-12 p-6 md:col-span-6 md:p-8">
+      <section className="dashboard-surface col-span-12 p-5 md:col-span-6 md:p-8">
         <div className="mb-6">
           <h3 className="text-lg font-semibold tracking-tight">Who paid</h3>
           <p className="mt-1 text-sm text-muted-foreground">Amount covered by each person</p>
@@ -103,7 +103,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
 
       <OwesList summary={s} monthKey={monthKey} />
 
-      <section className="dashboard-surface col-span-12 p-6 md:p-8">
+      <section className="dashboard-surface col-span-12 p-5 md:p-8">
         <div className="mb-6">
           <h3 className="text-lg font-semibold tracking-tight">Net balance by person</h3>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -126,7 +126,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
         </div>
       </section>
 
-      <section className="dashboard-surface col-span-12 p-6 md:p-8">
+      <section className="dashboard-surface col-span-12 p-5 md:p-8">
         <div className="mb-6">
           <h3 className="text-lg font-semibold tracking-tight">Recent transactions</h3>
           <p className="mt-1 text-sm text-muted-foreground">This month · newest first</p>

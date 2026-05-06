@@ -3,6 +3,7 @@
 import { deleteExpenseAction } from "@/app/actions/expenses";
 import { ExpenseDetailDialog } from "@/components/expenses/expense-detail-dialog";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
+import { CategoryIcon } from "@/components/icons/category-icon";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CATEGORY_META, EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/constants";
+import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
 import { cn, formatInr } from "@/lib/utils";
 import { buildWhatsAppShareUrl, shareTextNative } from "@/lib/whatsapp";
@@ -40,6 +41,7 @@ import { toast } from "sonner";
 export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   const { data: session } = useSession();
   const isSuperAdmin = Boolean(session?.user?.isSuperAdmin);
+  const actorLedgerUserId = session?.user?.ledgerUserId ?? null;
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -132,14 +134,16 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
+    <div className="space-y-5 md:space-y-6">
+      <div className="flex flex-col justify-between gap-3 sm:gap-4 md:flex-row md:items-center">
+        <div className="min-w-0">
           <h2 className="text-2xl font-semibold tracking-tight">Expenses</h2>
-          <p className="text-sm text-muted-foreground">Filter by month, category, or payer</p>
+          <p className="text-sm text-muted-foreground">
+            Filter by month, category, or payer. You can edit expenses you created.
+          </p>
         </div>
         <Button
-          className="hidden rounded-xl md:inline-flex"
+          className="hidden h-11 rounded-xl md:inline-flex"
           onClick={() => {
             setEditing(null);
             setDialogOpen(true);
@@ -150,32 +154,32 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
       </div>
 
       <Card className="rounded-2xl border shadow-sm">
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-3 md:pb-4">
           <CardTitle className="text-lg">Filters</CardTitle>
           <CardDescription>Search applies to title, notes, and description</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 md:flex-row md:flex-wrap">
+        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Input
             placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="rounded-xl md:max-w-xs"
+            className="rounded-xl sm:col-span-2 lg:col-span-1"
           />
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="rounded-xl md:w-[180px]">
+            <SelectTrigger className="h-11 rounded-xl">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
               <SelectItem value="all">All categories</SelectItem>
               {EXPENSE_CATEGORIES.map((c) => (
                 <SelectItem key={c} value={c}>
-                  {CATEGORY_META[c].emoji} {c}
+                  {c}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={paidBy} onValueChange={setPaidBy}>
-            <SelectTrigger className="rounded-xl md:w-[200px]">
+            <SelectTrigger className="h-11 rounded-xl">
               <SelectValue placeholder="Paid by" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
@@ -190,7 +194,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border shadow-sm">
+      <Card className="overflow-hidden rounded-2xl border shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="space-y-2 p-4">
@@ -203,19 +207,19 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
           ) : (
             <ul className="divide-y">
               {expenses.map((e) => {
-                const catMeta = CATEGORY_META[e.category as ExpenseCategory];
+                const canEditExpense = isSuperAdmin || (actorLedgerUserId != null && actorLedgerUserId === e.paidBy);
                 return (
                   <li key={e._id}>
                     <div
                       className={cn(
-                        "flex flex-col gap-3 p-4 transition-[box-shadow,transform] duration-200 md:flex-row md:items-center md:justify-between",
+                        "flex flex-col gap-3 p-4 transition-[box-shadow,transform] duration-200 md:flex-row md:items-center md:justify-between md:gap-4",
                         "motion-reduce:transform-none",
                         "hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:transform-none",
                       )}
                     >
                       <div className="flex min-w-0 flex-1 gap-3">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-lg">
-                          {catMeta.emoji}
+                          <CategoryIcon category={e.category as ExpenseCategory} className="h-5 w-5 text-muted-foreground" />
                         </div>
                         {e.billImage ? (
                           <Image
@@ -230,8 +234,8 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                         ) : null}
                         <div className="min-w-0 flex-1 space-y-1">
                           <p className="font-medium leading-snug">{e.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {catMeta.emoji} {e.category} · Paid by {userMap.get(e.paidBy) ?? "?"} ·{" "}
+                          <p className="truncate text-xs text-muted-foreground">
+                            {e.category} · Paid by {userMap.get(e.paidBy) ?? "?"} ·{" "}
                             {new Date(e.date).toLocaleDateString()}
                           </p>
                           {e.description ? (
@@ -244,49 +248,54 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 md:flex-col md:items-end lg:flex-row lg:items-center">
-                        <span className="text-lg font-semibold tabular-nums">{formatInr(e.amount)}</span>
+                      <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between md:min-w-[190px] md:flex-col md:items-end md:justify-center lg:min-w-0 lg:flex-row lg:items-center">
+                        <span className="text-right text-lg font-semibold tabular-nums sm:text-left md:text-right">
+                          {formatInr(e.amount)}
+                        </span>
                         <div className="flex flex-wrap justify-end gap-2">
                           <Button
                             type="button"
                             size="sm"
                             variant="secondary"
-                            className="rounded-xl"
+                            className="h-9 rounded-xl"
                             onClick={() => openView(e)}
                           >
-                            <Eye className="mr-1 h-4 w-4" />
+                            <Eye className="mr-1 h-4 w-4 shrink-0" />
                             View
                           </Button>
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-xl"
+                            className="h-9 rounded-xl"
                             onClick={() => shareExpense(e)}
                           >
-                            <Share2 className="h-4 w-4" />
+                            <Share2 className="h-4 w-4 shrink-0" />
                           </Button>
-                          {isSuperAdmin ? (
+                          {canEditExpense ? (
                             <>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="rounded-xl"
+                                className="h-9 rounded-xl"
+                                title={isSuperAdmin ? "Edit expense" : "You can edit your own expense"}
                                 onClick={() => {
                                   setEditing(e);
                                   setDialogOpen(true);
                                 }}
                               >
-                                <Pencil className="h-4 w-4" />
+                                <Pencil className="h-4 w-4 shrink-0" />
                               </Button>
+                              {isSuperAdmin ? (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="rounded-xl text-destructive"
+                                className="h-9 rounded-xl text-destructive"
                                 onClick={() => setDeleteId(e._id)}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4 shrink-0" />
                               </Button>
+                              ) : null}
                             </>
                           ) : null}
                         </div>

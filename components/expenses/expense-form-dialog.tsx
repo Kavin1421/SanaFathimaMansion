@@ -1,6 +1,7 @@
 "use client";
 
 import { createExpenseAction, updateExpenseAction } from "@/app/actions/expenses";
+import { CategoryIcon } from "@/components/icons/category-icon";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { EXPENSE_CATEGORIES, CATEGORY_META } from "@/lib/constants";
+import { EXPENSE_CATEGORIES } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import type { ExpenseDTO, UserDTO } from "@/types";
@@ -127,7 +128,7 @@ function FormFields({
                   : "border-border bg-card",
               )}
             >
-              <span className="text-lg">{CATEGORY_META[c].emoji}</span>
+              <CategoryIcon category={c} className="h-5 w-5 text-muted-foreground" />
               <span className="leading-tight">{c}</span>
             </button>
           ))}
@@ -297,6 +298,9 @@ export function ExpenseFormDialog({ users, monthKey, expense, open, onOpenChange
       }
       if (category === "Others" && !description.trim()) {
         throw new Error("Description is required for Others");
+      }
+      if (description.trim() && !/[A-Za-z]/.test(description.trim())) {
+        throw new Error("Description should contain meaningful text, not only numbers/symbols");
       }
       if (splitEnabled && splitIds.size === 0) {
         throw new Error("Pick at least one person to split with");

@@ -109,6 +109,23 @@ export default function OnboardingPage() {
     }
   }
 
+  async function completeWithoutInvites() {
+    setSaving(true);
+    try {
+      const done = await fetch("/api/onboarding/complete", { method: "POST" });
+      if (!done.ok) {
+        toast.error("Could not finish onboarding");
+        return;
+      }
+      await update?.();
+      toast.success("Onboarding completed. You can invite roommates later.");
+      router.push("/dashboard");
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (status === "loading" || loadingHouse) {
     return (
       <div className="mx-auto max-w-lg py-12">
@@ -152,9 +169,9 @@ export default function OnboardingPage() {
         </div>
       ) : (
         <div className="rounded-2xl border bg-card p-6 shadow-sm md:p-8">
-          <h2 className="text-2xl font-bold tracking-tight">Add roommates</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Add roommates (optional)</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Ledger members for splitting bills. Skip if you’ll add them later from Users.
+            Ledger members for splitting bills. If everyone already joined, skip now and invite later from Users.
           </p>
           <div className="mt-6 space-y-4">
             {members.map((m, i) => (
@@ -189,9 +206,20 @@ export default function OnboardingPage() {
             <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setStep(1)}>
               Back
             </Button>
-            <Button className="rounded-xl sm:min-w-[10rem]" onClick={finishOnboarding} disabled={saving}>
-              {saving ? "Finishing…" : "Finish"}
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={completeWithoutInvites}
+                disabled={saving}
+              >
+                {saving ? "Finishing…" : "Skip for now"}
+              </Button>
+              <Button className="rounded-xl sm:min-w-[10rem]" onClick={finishOnboarding} disabled={saving}>
+                {saving ? "Finishing…" : "Finish with invites"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

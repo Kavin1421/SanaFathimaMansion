@@ -233,12 +233,12 @@ export function UsersPageClient() {
       ) : null}
 
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-2xl font-semibold tracking-tight">Roommates</h2>
           <p className="text-sm text-muted-foreground">Balances update from the shared ledger</p>
         </div>
         {isSuperAdmin ? (
-          <Button className="rounded-xl gap-1" onClick={openCreate}>
+          <Button className="h-11 rounded-xl gap-1 md:w-auto" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Invite roommate
           </Button>
@@ -255,24 +255,24 @@ export function UsersPageClient() {
         <div className="grid gap-4 sm:grid-cols-2">
           {users?.map((u) => (
             <Card key={u._id} className="rounded-2xl border shadow-sm">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <div className="flex items-center gap-3">
+              <CardHeader className="flex flex-col gap-3 space-y-0 pb-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
                   <Avatar className="h-12 w-12 border">
                     {u.avatar ? <AvatarImage src={u.avatar} alt={u.name} /> : null}
                     <AvatarFallback>{u.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <div>
-                    <CardTitle className="text-lg">{u.name}</CardTitle>
-                    <CardDescription>{u.email}</CardDescription>
+                  <div className="min-w-0">
+                    <CardTitle className="truncate text-lg">{u.name}</CardTitle>
+                    <CardDescription className="truncate">{u.email}</CardDescription>
                   </div>
                 </div>
                 {isSuperAdmin ? (
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 self-end sm:self-start">
                     {u.status === "invited" ? (
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="rounded-xl"
+                        className="h-9 w-9 rounded-xl"
                         disabled={resendMut.isPending}
                         onClick={() => resendMut.mutate(u._id)}
                         title="Resend invite"
@@ -280,13 +280,13 @@ export function UsersPageClient() {
                         <Mail className="h-4 w-4" />
                       </Button>
                     ) : null}
-                    <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => openEdit(u)}>
+                    <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl" onClick={() => openEdit(u)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="rounded-xl text-destructive"
+                      className="h-9 w-9 rounded-xl text-destructive"
                       onClick={() => setDeleteId(u._id)}
                     >
                       <Trash2 className="h-4 w-4" />

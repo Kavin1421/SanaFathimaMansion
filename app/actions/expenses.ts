@@ -100,16 +100,6 @@ export async function updateExpenseAction(
     } catch {}
     return { ok: false, error: "Unauthorized" };
   }
-  if (!isAdminSession(session)) {
-    try {
-      await appendAuditLog({
-        actionType: "ACCESS_DENIED",
-        performedBy: performerFromSession(session),
-        targetEntity: { type: "expense", id: input.id, label: "updateExpenseAction" },
-      });
-    } catch {}
-    return { ok: false, error: "Only a super admin can edit expenses" };
-  }
   const parsed = updateExpenseSchema.safeParse(input);
   if (!parsed.success) {
     try {
@@ -124,6 +114,20 @@ export async function updateExpenseAction(
   }
   try {
     const before = await getExpenseById(parsed.data.id);
+    if (!before) return { ok: false, error: "Expense not found" };
+    const actorLedgerUserId = session.user.ledgerUserId ?? null;
+    const canEdit = isAdminSession(session) || (actorLedgerUserId != null && actorLedgerUserId === before.paidBy);
+    if (!canEdit) {
+      try {
+        await appendAuditLog({
+          actionType: "ACCESS_DENIED",
+          performedBy: performerFromSession(session),
+          targetEntity: { type: "expense", id: parsed.data.id, label: "updateExpenseAction" },
+          newValue: toAuditJson({ reason: "not_owner_or_admin", actorLedgerUserId, paidBy: before.paidBy }),
+        });
+      } catch {}
+      return { ok: false, error: "Only super admin or expense owner can edit this expense" };
+    }
     const data = await updateExpense(parsed.data);
     if (!data) return { ok: false, error: "Expense not found" };
     try {

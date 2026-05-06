@@ -139,6 +139,17 @@ export function notifyWhatsAppExpense(
       const n = dto.splitBetween.length;
       const sharePer =
         isSplit && n > 1 ? roundMoney(dto.amount / n) : null;
+      const splitMembers =
+        isSplit && n > 1
+          ? (
+              await User.find({ _id: { $in: dto.splitBetween } })
+                .select("name")
+                .lean()
+            ).map((u) => ({
+              name: u.name,
+              amount: sharePer ?? 0,
+            }))
+          : [];
 
       const detailUrl = appDetailUrl(monthKey);
 
@@ -156,6 +167,7 @@ export function notifyWhatsAppExpense(
           isSplit,
           splitCount: n,
           splitShareAmount: sharePer ?? undefined,
+          splitMembers: splitMembers.length > 0 ? splitMembers : undefined,
           walletRemaining: remaining,
           budget,
           budgetUsagePercent,

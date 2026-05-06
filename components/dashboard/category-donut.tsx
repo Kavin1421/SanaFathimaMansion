@@ -50,7 +50,7 @@ export function CategoryDonut({ data }: Props) {
             <Tooltip
               formatter={(value: number, _n, item) => {
                 const payload = item?.payload as Row | undefined;
-                const label = payload ? `${payload.emoji} ${payload.category}` : "";
+                const label = payload ? payload.category : "";
                 return [formatInr(value as number), label];
               }}
               contentStyle={{

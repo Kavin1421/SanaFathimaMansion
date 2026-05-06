@@ -2,8 +2,9 @@
 
 import type { MonthlySummary } from "@/types";
 import { cn } from "@/lib/utils";
+import { BellRing, Info, Lightbulb, TriangleAlert, type LucideIcon } from "lucide-react";
 
-type Pill = { key: string; emoji: string; text: string; variant: "warn" | "info" | "action" };
+type Pill = { key: string; icon: LucideIcon; text: string; variant: "warn" | "info" | "action" };
 
 export function NotificationsStack({ summary }: { summary: MonthlySummary }) {
   const pills: Pill[] = [];
@@ -13,7 +14,7 @@ export function NotificationsStack({ summary }: { summary: MonthlySummary }) {
       summary.percentChangeVsPrevious !== undefined && summary.percentChangeVsPrevious > 0;
     pills.push({
       key: "insight",
-      emoji: isUp ? "⚠️" : "💡",
+      icon: isUp ? TriangleAlert : Lightbulb,
       text: summary.insight,
       variant: isUp ? "warn" : "info",
     });
@@ -23,7 +24,7 @@ export function NotificationsStack({ summary }: { summary: MonthlySummary }) {
   if (pct !== undefined && Math.abs(pct) > 15 && !summary.insight) {
     pills.push({
       key: "swing",
-      emoji: "⚠️",
+      icon: TriangleAlert,
       text: `Spending shifted ${pct > 0 ? "+" : ""}${pct.toFixed(1)}% vs last month.`,
       variant: "warn",
     });
@@ -33,7 +34,7 @@ export function NotificationsStack({ summary }: { summary: MonthlySummary }) {
   if (rent && summary.totalSpent > 0 && rent.total / summary.totalSpent > 0.4) {
     pills.push({
       key: "rent-share",
-      emoji: "💡",
+      icon: Info,
       text: "Rent is a large share of spending this month.",
       variant: "info",
     });
@@ -42,7 +43,7 @@ export function NotificationsStack({ summary }: { summary: MonthlySummary }) {
   if (summary.suggestions.length > 0) {
     pills.push({
       key: "settle",
-      emoji: "🔔",
+      icon: BellRing,
       text: `${summary.suggestions.length} settlement${summary.suggestions.length > 1 ? "s" : ""} waiting — settle up below.`,
       variant: "action",
     });
@@ -53,6 +54,9 @@ export function NotificationsStack({ summary }: { summary: MonthlySummary }) {
   return (
     <div className="col-span-12 flex flex-col gap-2">
       {pills.map((p) => (
+        (() => {
+          const Icon = p.icon;
+          return (
         <div
           key={p.key}
           className={cn(
@@ -65,11 +69,13 @@ export function NotificationsStack({ summary }: { summary: MonthlySummary }) {
               "border-primary/25 bg-primary/5 text-foreground dark:border-primary/30 dark:bg-primary/10",
           )}
         >
-          <span className="shrink-0 text-base leading-none" aria-hidden>
-            {p.emoji}
+          <span className="shrink-0 leading-none" aria-hidden>
+            <Icon className="h-4 w-4" />
           </span>
           <span className="leading-snug">{p.text}</span>
         </div>
+          );
+        })()
       ))}
     </div>
   );
