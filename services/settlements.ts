@@ -10,7 +10,9 @@ function toDTO(s: {
   toUser: { toString(): string };
   amount: number;
   date: Date;
-  status: "pending" | "completed";
+  status: "pending" | "completed" | "confirmed";
+  confirmedBy?: { toString(): string };
+  confirmedAt?: Date;
 }): SettlementDTO {
   return {
     _id: s._id.toString(),
@@ -19,6 +21,8 @@ function toDTO(s: {
     amount: s.amount,
     date: s.date.toISOString(),
     status: s.status,
+    confirmedBy: s.confirmedBy?.toString(),
+    confirmedAt: s.confirmedAt?.toISOString(),
   };
 }
 
@@ -33,6 +37,8 @@ export async function listSettlements(): Promise<SettlementDTO[]> {
       amount: s.amount,
       date: s.date,
       status: s.status,
+      confirmedBy: s.confirmedBy as { toString(): string } | undefined,
+      confirmedAt: s.confirmedAt,
     }),
   );
 }
@@ -57,4 +63,33 @@ export async function deleteSettlement(id: string): Promise<boolean> {
   if (res.deletedCount === 0) return false;
   await recomputeAllUserBalances();
   return true;
+}
+
+export async function confirmSettlement(input: {
+  id: string;
+  confirmedByAccountId: string;
+}): Promise<SettlementDTO | null> {
+  await connectDb();
+  const doc = await Settlement.findOneAndUpdate(
+    { _id: input.id, status: "completed" },
+    {
+      $set: {
+        status: "confirmed",
+        confirmedBy: input.confirmedByAccountId,
+        confirmedAt: new Date(),
+      },
+    },
+    { new: true },
+  ).lean();
+  if (!doc) return null;
+  return toDTO({
+    _id: doc._id,
+    fromUser: doc.fromUser,
+    toUser: doc.toUser,
+    amount: doc.amount,
+    date: doc.date,
+    status: doc.status,
+    confirmedBy: doc.confirmedBy as { toString(): string } | undefined,
+    confirmedAt: doc.confirmedAt,
+  });
 }

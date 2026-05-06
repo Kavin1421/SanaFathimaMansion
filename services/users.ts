@@ -1,5 +1,9 @@
 import { connectDb } from "@/lib/db";
-import type { CreateUserInput, UpdateUserInput } from "@/lib/validation";
+import type {
+  CreateUserInput,
+  UpdateReminderPreferencesInput,
+  UpdateUserInput,
+} from "@/lib/validation";
 import { Account } from "@/models/Account";
 import { Expense } from "@/models/Expense";
 import { User } from "@/models/User";
@@ -11,6 +15,11 @@ function toDTO(u: {
   status: "invited" | "active" | "disabled";
   invitedAt?: Date;
   activatedAt?: Date;
+  reminderPreferences?: {
+    frequency: "daily" | "weekly";
+    channels: { email: boolean; whatsapp: boolean };
+    quietHours: { startHour: number; endHour: number };
+  };
   avatar?: string;
   totalPaid: number;
   balance: number;
@@ -22,6 +31,19 @@ function toDTO(u: {
     status: u.status,
     invitedAt: u.invitedAt?.toISOString(),
     activatedAt: u.activatedAt?.toISOString(),
+    reminderPreferences: u.reminderPreferences
+      ? {
+          frequency: u.reminderPreferences.frequency,
+          channels: {
+            email: u.reminderPreferences.channels.email,
+            whatsapp: u.reminderPreferences.channels.whatsapp,
+          },
+          quietHours: {
+            startHour: u.reminderPreferences.quietHours.startHour,
+            endHour: u.reminderPreferences.quietHours.endHour,
+          },
+        }
+      : undefined,
     avatar: u.avatar,
     totalPaid: u.totalPaid,
     balance: u.balance,
@@ -39,6 +61,7 @@ export async function getUserById(id: string): Promise<UserDTO | null> {
     status: u.status,
     invitedAt: u.invitedAt,
     activatedAt: u.activatedAt,
+    reminderPreferences: u.reminderPreferences,
     avatar: u.avatar,
     totalPaid: u.totalPaid,
     balance: u.balance,
@@ -56,6 +79,7 @@ export async function listUsers(): Promise<UserDTO[]> {
       status: u.status,
       invitedAt: u.invitedAt,
       activatedAt: u.activatedAt,
+      reminderPreferences: u.reminderPreferences,
       avatar: u.avatar,
       totalPaid: u.totalPaid,
       balance: u.balance,
@@ -81,6 +105,11 @@ export async function createUser(input: CreateUserInput): Promise<UserDTO> {
     email,
     status: "invited",
     invitedAt: new Date(),
+    reminderPreferences: {
+      frequency: "daily",
+      channels: { email: true, whatsapp: true },
+      quietHours: { startHour: 22, endHour: 8 },
+    },
     avatar,
     totalPaid: 0,
     balance: 0,
@@ -112,6 +141,7 @@ export async function updateUser(input: UpdateUserInput): Promise<UserDTO | null
     status: doc.status,
     invitedAt: doc.invitedAt,
     activatedAt: doc.activatedAt,
+    reminderPreferences: doc.reminderPreferences,
     avatar: doc.avatar,
     totalPaid: doc.totalPaid,
     balance: doc.balance,
@@ -148,6 +178,7 @@ export async function activateInvitedUserByEmail(emailInput: string): Promise<Us
     status: doc.status,
     invitedAt: doc.invitedAt,
     activatedAt: doc.activatedAt,
+    reminderPreferences: doc.reminderPreferences,
     avatar: doc.avatar,
     totalPaid: doc.totalPaid,
     balance: doc.balance,
@@ -169,6 +200,45 @@ export async function markUserInviteResent(id: string): Promise<UserDTO | null> 
     status: doc.status,
     invitedAt: doc.invitedAt,
     activatedAt: doc.activatedAt,
+    reminderPreferences: doc.reminderPreferences,
+    avatar: doc.avatar,
+    totalPaid: doc.totalPaid,
+    balance: doc.balance,
+  });
+}
+
+export async function updateReminderPreferences(
+  input: UpdateReminderPreferencesInput,
+): Promise<UserDTO | null> {
+  await connectDb();
+  const doc = await User.findByIdAndUpdate(
+    input.userId,
+    {
+      $set: {
+        reminderPreferences: {
+          frequency: input.frequency,
+          channels: {
+            email: input.channels.email,
+            whatsapp: input.channels.whatsapp,
+          },
+          quietHours: {
+            startHour: input.quietHours.startHour,
+            endHour: input.quietHours.endHour,
+          },
+        },
+      },
+    },
+    { new: true },
+  ).lean();
+  if (!doc) return null;
+  return toDTO({
+    _id: doc._id,
+    name: doc.name,
+    email: doc.email,
+    status: doc.status,
+    invitedAt: doc.invitedAt,
+    activatedAt: doc.activatedAt,
+    reminderPreferences: doc.reminderPreferences,
     avatar: doc.avatar,
     totalPaid: doc.totalPaid,
     balance: doc.balance,

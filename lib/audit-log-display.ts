@@ -9,6 +9,7 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   CREATE_USER: "User invited",
   RESEND_INVITE: "Invite resent",
   CREATE_SETTLEMENT: "Settlement recorded",
+  SETTLEMENT_CONFIRMED: "Settlement confirmed",
   NUDGE_SENT: "Nudge sent",
   ADD_EXPENSE_COMMENT: "Expense comment added",
   TOGGLE_EXPENSE_REACTION: "Expense reaction toggled",
@@ -21,6 +22,7 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   UPDATE_HOUSE: "House updated",
   UPDATE_BUDGET: "Budget updated",
   UPDATE_USER: "User updated",
+  UPDATE_REMINDER_PREFS: "Reminder preferences updated",
   DELETE_USER: "User deleted",
 };
 
@@ -75,6 +77,8 @@ export function auditLogSummaryLine(row: AuditLogRow): string {
       return "Session started";
     case "CREATE_SETTLEMENT":
       return targetEntity.label?.trim() || "Settlement completed";
+    case "SETTLEMENT_CONFIRMED":
+      return targetEntity.label?.trim() || "Settlement confirmed";
     case "NUDGE_SENT":
       return targetEntity.label?.trim() || "Settlement reminder sent";
     case "ADD_EXPENSE_COMMENT":
@@ -104,6 +108,7 @@ export function auditLogSummaryLine(row: AuditLogRow): string {
         ? `Budget set to ${formatInr(newValue.budget)}`
         : "Budget changed";
     case "UPDATE_USER":
+    case "UPDATE_REMINDER_PREFS":
     case "CREATE_USER":
     case "DELETE_USER":
       return targetEntity.label?.trim() || (previousValue?.email as string) || (newValue?.email as string) || fallback;

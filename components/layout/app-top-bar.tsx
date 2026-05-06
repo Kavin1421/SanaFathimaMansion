@@ -32,6 +32,7 @@ import { useEffect, useState } from "react";
 const pathTitles: { prefix: string; title: string }[] = [
   { prefix: "/dashboard", title: "Dashboard" },
   { prefix: "/expenses", title: "Expenses" },
+  { prefix: "/settlements", title: "Settlements" },
   { prefix: "/users", title: "Users" },
   { prefix: "/reports", title: "Reports" },
   { prefix: "/audit-logs", title: "Audit logs" },

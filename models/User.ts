@@ -10,6 +10,17 @@ export type UserDocument = {
   invitedAt?: Date;
   activatedAt?: Date;
   lastReminderAt?: Date;
+  reminderPreferences?: {
+    frequency: "daily" | "weekly";
+    channels: {
+      email: boolean;
+      whatsapp: boolean;
+    };
+    quietHours: {
+      startHour: number;
+      endHour: number;
+    };
+  };
   avatar?: string;
   totalPaid: number;
   balance: number;
@@ -23,6 +34,17 @@ const userSchema = new Schema<UserDocument>(
     invitedAt: { type: Date },
     activatedAt: { type: Date },
     lastReminderAt: { type: Date },
+    reminderPreferences: {
+      frequency: { type: String, enum: ["daily", "weekly"], default: "daily" },
+      channels: {
+        email: { type: Boolean, default: true },
+        whatsapp: { type: Boolean, default: true },
+      },
+      quietHours: {
+        startHour: { type: Number, min: 0, max: 23, default: 22 },
+        endHour: { type: Number, min: 0, max: 23, default: 8 },
+      },
+    },
     avatar: { type: String },
     totalPaid: { type: Number, default: 0 },
     balance: { type: Number, default: 0 },

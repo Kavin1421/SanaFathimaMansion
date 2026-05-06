@@ -6,7 +6,9 @@ export type SettlementDocument = {
   toUser: Types.ObjectId;
   amount: number;
   date: Date;
-  status: "pending" | "completed";
+  status: "pending" | "completed" | "confirmed";
+  confirmedBy?: Types.ObjectId;
+  confirmedAt?: Date;
 };
 
 const settlementSchema = new Schema<SettlementDocument>(
@@ -15,7 +17,9 @@ const settlementSchema = new Schema<SettlementDocument>(
     toUser: { type: Schema.Types.ObjectId, ref: "User", required: true },
     amount: { type: Number, required: true, min: 0 },
     date: { type: Date, required: true },
-    status: { type: String, enum: ["pending", "completed"], default: "pending" },
+    status: { type: String, enum: ["pending", "completed", "confirmed"], default: "pending" },
+    confirmedBy: { type: Schema.Types.ObjectId, ref: "Account" },
+    confirmedAt: { type: Date },
   },
   { timestamps: true },
 );

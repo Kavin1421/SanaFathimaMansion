@@ -9,7 +9,7 @@ import { createSettlementSchema, type CreateSettlementInput } from "@/lib/valida
 import { sendSettlementNudgeEmail } from "@/lib/email";
 import { notifyWhatsAppSettlementRecorded, notifyWhatsAppText } from "@/lib/whatsapp-notify";
 import { appendAuditLog } from "@/services/audit-log";
-import { recordCompletedSettlement } from "@/services/settlements";
+import { confirmSettlement, listSettlements, recordCompletedSettlement } from "@/services/settlements";
 import { getUserById } from "@/services/users";
 import type { ActionResult } from "./users";
 
@@ -189,5 +189,51 @@ export async function sendSettlementNudgeAction(input: {
   } catch (e) {
     console.error(e);
     return { ok: false, error: "Could not send nudge" };
+  }
+}
+
+export async function confirmSettlementAction(input: {
+  settlementId: string;
+}): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof confirmSettlement>>>>> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return { ok: false, error: "Unauthorized" };
+  if (!input.settlementId?.trim()) return { ok: false, error: "Settlement id is required" };
+  try {
+    const existing = await listSettlements();
+    const settlement = existing.find((s) => s._id === input.settlementId);
+    if (!settlement) return { ok: false, error: "Settlement not found" };
+    const actorLedgerUserId = session.user.ledgerUserId;
+    const actorIsParticipant =
+      actorLedgerUserId != null &&
+      (actorLedgerUserId === settlement.fromUser || actorLedgerUserId === settlement.toUser);
+    if (!isAdminSession(session) && !actorIsParticipant) {
+      return { ok: false, error: "Only participants (or super admin) can confirm settlement" };
+    }
+
+    const data = await confirmSettlement({
+      id: input.settlementId,
+      confirmedByAccountId: session.user.id,
+    });
+    if (!data) return { ok: false, error: "Settlement not found or already confirmed" };
+
+    const [fromUser, toUser] = await Promise.all([getUserById(data.fromUser), getUserById(data.toUser)]);
+    try {
+      await appendAuditLog({
+        actionType: "SETTLEMENT_CONFIRMED",
+        performedBy: performerFromSession(session),
+        targetEntity: {
+          type: "settlement",
+          id: data._id,
+          label: `${fromUser?.name ?? "?"} → ${toUser?.name ?? "?"}`,
+        },
+        newValue: toAuditJson(data),
+      });
+    } catch {}
+    revalidatePath("/dashboard");
+    revalidatePath("/settlements");
+    revalidatePath("/audit-logs");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not confirm settlement" };
   }
 }

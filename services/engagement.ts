@@ -7,6 +7,15 @@ import { sendBalanceReminderEmail, sendMonthlySummaryEmail } from "@/lib/email";
 import { User } from "@/models/User";
 import { getMonthlySummary } from "@/services/aggregations";
 
+function isWithinQuietHours(now: Date, prefs: { startHour: number; endHour: number }): boolean {
+  const hour = now.getHours();
+  const { startHour, endHour } = prefs;
+  if (startHour < endHour) {
+    return hour >= startHour && hour < endHour;
+  }
+  return hour >= startHour || hour < endHour;
+}
+
 export async function runDailyBalanceReminders(now = new Date()): Promise<{ reminded: number }> {
   await connectDb();
   const houseName = await getHouseDisplayName();
@@ -14,22 +23,38 @@ export async function runDailyBalanceReminders(now = new Date()): Promise<{ remi
   const owing = users.filter((u) => u.balance < -0.01);
 
   let reminded = 0;
+  const whatsappLines: string[] = [];
   for (const u of owing) {
+    const prefs = u.reminderPreferences ?? {
+      frequency: "daily",
+      channels: { email: true, whatsapp: true },
+      quietHours: { startHour: 22, endHour: 8 },
+    };
+    if (prefs.frequency === "weekly" && now.getDay() !== 1) {
+      continue;
+    }
+    if (isWithinQuietHours(now, prefs.quietHours)) {
+      continue;
+    }
     const amount = Math.abs(u.balance);
-    await sendBalanceReminderEmail({
-      to: u.email,
-      name: u.name,
-      houseName,
-      amountOwed: amount,
-    });
+    if (prefs.channels.email) {
+      await sendBalanceReminderEmail({
+        to: u.email,
+        name: u.name,
+        houseName,
+        amountOwed: amount,
+      });
+    }
+    if (prefs.channels.whatsapp) {
+      whatsappLines.push(`• ${u.name} owes ₹${amount.toLocaleString("en-IN")}`);
+    }
     reminded += 1;
     await User.updateOne({ _id: u._id }, { $set: { lastReminderAt: now } });
   }
 
-  if (owing.length > 0) {
-    const lines = owing.map((u) => `• ${u.name} owes ₹${Math.abs(u.balance).toLocaleString("en-IN")}`);
+  if (whatsappLines.length > 0) {
     notifyWhatsAppText(
-      `📌 Daily balance reminder\n${lines.join("\n")}\n\nPlease settle and mark as settled in app.`,
+      `📌 Daily balance reminder\n${whatsappLines.join("\n")}\n\nPlease settle and mark as settled in app.`,
     );
   }
 

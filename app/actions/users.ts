@@ -9,12 +9,21 @@ import { sendInviteEmail } from "@/lib/email";
 import { getHouseDisplayName } from "@/lib/house-name";
 import {
   createUserSchema,
+  updateReminderPreferencesSchema,
   updateUserSchema,
   type CreateUserInput,
+  type UpdateReminderPreferencesInput,
   type UpdateUserInput,
 } from "@/lib/validation";
 import { appendAuditLog } from "@/services/audit-log";
-import { createUser, deleteUser, getUserById, markUserInviteResent, updateUser } from "@/services/users";
+import {
+  createUser,
+  deleteUser,
+  getUserById,
+  markUserInviteResent,
+  updateReminderPreferences,
+  updateUser,
+} from "@/services/users";
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -262,5 +271,51 @@ export async function resendInviteAction(userId: string): Promise<ActionResult<{
   } catch (e) {
     console.error(e);
     return { ok: false, error: e instanceof Error ? e.message : "Could not resend invite" };
+  }
+}
+
+export async function updateReminderPreferencesAction(
+  input: UpdateReminderPreferencesInput,
+): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof updateReminderPreferences>>>>> {
+  const session = await requireUserSession();
+  if (!session) return { ok: false, error: "Unauthorized" };
+
+  const parsed = updateReminderPreferencesSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
+  }
+
+  const actorLedgerUserId = session.user.ledgerUserId ?? null;
+  const canUpdate = isAdminSession(session) || actorLedgerUserId === parsed.data.userId;
+  if (!canUpdate) {
+    try {
+      await appendAuditLog({
+        actionType: "ACCESS_DENIED",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: parsed.data.userId, label: "updateReminderPreferencesAction" },
+      });
+    } catch {}
+    return { ok: false, error: "You can only edit your own reminder preferences" };
+  }
+
+  try {
+    const before = await getUserById(parsed.data.userId);
+    const data = await updateReminderPreferences(parsed.data);
+    if (!data) return { ok: false, error: "User not found" };
+    try {
+      await appendAuditLog({
+        actionType: "UPDATE_REMINDER_PREFS",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: data._id, label: data.name },
+        previousValue: toAuditJson(before?.reminderPreferences ?? null),
+        newValue: toAuditJson(data.reminderPreferences ?? null),
+      });
+    } catch {}
+    revalidatePath("/users");
+    revalidatePath("/dashboard");
+    revalidatePath("/audit-logs");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not update reminder preferences" };
   }
 }

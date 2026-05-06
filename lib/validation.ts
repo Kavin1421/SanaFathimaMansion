@@ -33,6 +33,23 @@ export const updateUserSchema = createUserSchema.partial().extend({
   id: objectIdString,
 });
 
+export const updateReminderPreferencesSchema = z.object({
+  userId: objectIdString,
+  frequency: z.enum(["daily", "weekly"]),
+  channels: z.object({
+    email: z.boolean(),
+    whatsapp: z.boolean(),
+  }),
+  quietHours: z
+    .object({
+      startHour: z.number().int().min(0).max(23),
+      endHour: z.number().int().min(0).max(23),
+    })
+    .refine((v) => v.startHour !== v.endHour, {
+      message: "Quiet hours start and end cannot be the same",
+    }),
+});
+
 /** Accepts Cloudinary / any https image URL; trims; empty → undefined (omit). */
 const billImageUrlSchema = z.preprocess(
   (v) => {
@@ -170,6 +187,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupFormInput = z.infer<typeof signupFormSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type UpdateReminderPreferencesInput = z.infer<typeof updateReminderPreferencesSchema>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 export type CreateSettlementInput = z.infer<typeof createSettlementSchema>;

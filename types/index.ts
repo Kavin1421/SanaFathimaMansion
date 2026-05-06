@@ -9,6 +9,17 @@ export type UserDTO = {
   status: "invited" | "active" | "disabled";
   invitedAt?: string;
   activatedAt?: string;
+  reminderPreferences?: {
+    frequency: "daily" | "weekly";
+    channels: {
+      email: boolean;
+      whatsapp: boolean;
+    };
+    quietHours: {
+      startHour: number;
+      endHour: number;
+    };
+  };
   avatar?: string;
   totalPaid: number;
   balance: number;
@@ -47,7 +58,9 @@ export type SettlementDTO = {
   toUser: string;
   amount: number;
   date: string;
-  status: "pending" | "completed";
+  status: "pending" | "completed" | "confirmed";
+  confirmedBy?: string;
+  confirmedAt?: string;
 };
 
 export type SettlementSuggestion = {
