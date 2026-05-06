@@ -35,6 +35,7 @@ const pathTitles: { prefix: string; title: string }[] = [
   { prefix: "/users", title: "Users" },
   { prefix: "/reports", title: "Reports" },
   { prefix: "/audit-logs", title: "Audit logs" },
+  { prefix: "/notification-events", title: "Notification events" },
   { prefix: "/onboarding", title: "Welcome" },
 ];
 

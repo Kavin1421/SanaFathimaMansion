@@ -7,7 +7,11 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   UPDATE_EXPENSE: "Expense updated",
   DELETE_EXPENSE: "Expense deleted",
   CREATE_USER: "User invited",
+  RESEND_INVITE: "Invite resent",
   CREATE_SETTLEMENT: "Settlement recorded",
+  NUDGE_SENT: "Nudge sent",
+  ADD_EXPENSE_COMMENT: "Expense comment added",
+  TOGGLE_EXPENSE_REACTION: "Expense reaction toggled",
   ACCESS_DENIED: "Access denied",
   VALIDATION_FAILED: "Validation failed",
   ACTION_FAILED: "Action failed",
@@ -71,6 +75,14 @@ export function auditLogSummaryLine(row: AuditLogRow): string {
       return "Session started";
     case "CREATE_SETTLEMENT":
       return targetEntity.label?.trim() || "Settlement completed";
+    case "NUDGE_SENT":
+      return targetEntity.label?.trim() || "Settlement reminder sent";
+    case "ADD_EXPENSE_COMMENT":
+      return targetEntity.label?.trim() || "Comment added";
+    case "TOGGLE_EXPENSE_REACTION":
+      return targetEntity.label?.trim() || "Reaction changed";
+    case "RESEND_INVITE":
+      return targetEntity.label?.trim() || (newValue?.email as string) || "Invite resent";
     case "ACCESS_DENIED":
       return "Blocked by permissions";
     case "VALIDATION_FAILED":

@@ -1,6 +1,21 @@
 import mongoose, { Schema, type Model, type Types } from "mongoose";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 
+export type ExpenseComment = {
+  _id: Types.ObjectId;
+  accountId: string;
+  authorName: string;
+  text: string;
+  createdAt: Date;
+};
+
+export type ExpenseReaction = {
+  emoji: string;
+  accountId: string;
+  authorName: string;
+  createdAt: Date;
+};
+
 export type ExpenseDocument = {
   _id: Types.ObjectId;
   title: string;
@@ -13,7 +28,29 @@ export type ExpenseDocument = {
   notes?: string;
   description?: string;
   billImage?: string;
+  comments: ExpenseComment[];
+  reactions: ExpenseReaction[];
 };
+
+const expenseCommentSchema = new Schema<ExpenseComment>(
+  {
+    accountId: { type: String, required: true },
+    authorName: { type: String, required: true },
+    text: { type: String, required: true, trim: true, maxlength: 800 },
+    createdAt: { type: Date, required: true, default: Date.now },
+  },
+  { _id: true },
+);
+
+const expenseReactionSchema = new Schema<ExpenseReaction>(
+  {
+    emoji: { type: String, required: true, trim: true, maxlength: 8 },
+    accountId: { type: String, required: true },
+    authorName: { type: String, required: true },
+    createdAt: { type: Date, required: true, default: Date.now },
+  },
+  { _id: false },
+);
 
 const expenseSchema = new Schema<ExpenseDocument>(
   {
@@ -27,6 +64,8 @@ const expenseSchema = new Schema<ExpenseDocument>(
     notes: { type: String },
     description: { type: String },
     billImage: { type: String },
+    comments: { type: [expenseCommentSchema], default: [] },
+    reactions: { type: [expenseReactionSchema], default: [] },
   },
   { timestamps: true },
 );

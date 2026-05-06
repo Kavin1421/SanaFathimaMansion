@@ -1,6 +1,6 @@
 "use client";
 
-import { createUserAction, deleteUserAction, updateUserAction } from "@/app/actions/users";
+import { createUserAction, deleteUserAction, resendInviteAction, updateUserAction } from "@/app/actions/users";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AlertDialog,
@@ -29,7 +29,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { formatInr } from "@/lib/utils";
 import type { UserDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Loader2, Mail, Pencil, Plus, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -93,6 +93,20 @@ export function UsersPageClient() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const resendMut = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await resendInviteAction(id);
+      if (!r.ok) throw new Error(r.error);
+      return r.data;
+    },
+    onSuccess: () => {
+      toast.success("Invite resent");
+      qc.invalidateQueries({ queryKey: queryKeys.users });
+      qc.invalidateQueries({ queryKey: ["auditLogs"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   function openCreate() {
     setEditing(null);
     setName("");
@@ -147,6 +161,18 @@ export function UsersPageClient() {
                 </div>
                 {isSuperAdmin ? (
                   <div className="flex gap-1">
+                    {u.status === "invited" ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="rounded-xl"
+                        disabled={resendMut.isPending}
+                        onClick={() => resendMut.mutate(u._id)}
+                        title="Resend invite"
+                      >
+                        <Mail className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                     <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => openEdit(u)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -176,6 +202,13 @@ export function UsersPageClient() {
                       {u.status}
                     </Badge>
                   </div>
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {u.status === "invited" && u.invitedAt
+                    ? `Invited: ${new Date(u.invitedAt).toLocaleString()}`
+                    : u.status === "active" && u.activatedAt
+                      ? `Activated: ${new Date(u.activatedAt).toLocaleString()}`
+                      : "Lifecycle timestamps unavailable"}
                 </div>
               </CardContent>
             </Card>

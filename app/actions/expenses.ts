@@ -13,7 +13,14 @@ import {
 } from "@/lib/validation";
 import { notifyWhatsAppExpense } from "@/lib/whatsapp-notify";
 import { appendAuditLog } from "@/services/audit-log";
-import { createExpense, deleteExpense, getExpenseById, updateExpense } from "@/services/expenses";
+import {
+  addExpenseComment,
+  createExpense,
+  deleteExpense,
+  getExpenseById,
+  toggleExpenseReaction,
+  updateExpense,
+} from "@/services/expenses";
 import type { ActionResult } from "./users";
 
 async function requireUserSession() {
@@ -201,5 +208,72 @@ export async function deleteExpenseAction(id: string): Promise<ActionResult<null
       });
     } catch {}
     return { ok: false, error: "Could not delete expense" };
+  }
+}
+
+export async function addExpenseCommentAction(input: {
+  expenseId: string;
+  text: string;
+}): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof addExpenseComment>>>>> {
+  const session = await requireUserSession();
+  if (!session) return { ok: false, error: "Unauthorized" };
+  const text = input.text.trim();
+  if (text.length < 1) return { ok: false, error: "Comment cannot be empty" };
+  if (text.length > 800) return { ok: false, error: "Comment too long" };
+  try {
+    const data = await addExpenseComment({
+      expenseId: input.expenseId,
+      accountId: session.user.id,
+      authorName: session.user.name ?? "User",
+      text,
+    });
+    if (!data) return { ok: false, error: "Expense not found" };
+    try {
+      await appendAuditLog({
+        actionType: "ADD_EXPENSE_COMMENT",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id: data._id, label: data.title },
+        newValue: toAuditJson({ commentBy: session.user.name, text }),
+      });
+    } catch {}
+    revalidatePath("/expenses");
+    revalidatePath("/dashboard");
+    revalidatePath("/audit-logs");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not add comment" };
+  }
+}
+
+export async function toggleExpenseReactionAction(input: {
+  expenseId: string;
+  emoji: string;
+}): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof toggleExpenseReaction>>>>> {
+  const session = await requireUserSession();
+  if (!session) return { ok: false, error: "Unauthorized" };
+  const emoji = input.emoji.trim();
+  if (!emoji) return { ok: false, error: "Emoji required" };
+  try {
+    const data = await toggleExpenseReaction({
+      expenseId: input.expenseId,
+      accountId: session.user.id,
+      authorName: session.user.name ?? "User",
+      emoji,
+    });
+    if (!data) return { ok: false, error: "Expense not found" };
+    try {
+      await appendAuditLog({
+        actionType: "TOGGLE_EXPENSE_REACTION",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id: data._id, label: data.title },
+        newValue: toAuditJson({ emoji }),
+      });
+    } catch {}
+    revalidatePath("/expenses");
+    revalidatePath("/dashboard");
+    revalidatePath("/audit-logs");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not update reaction" };
   }
 }

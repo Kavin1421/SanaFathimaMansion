@@ -18,6 +18,8 @@ function toDTO(e: {
   notes?: string;
   description?: string;
   billImage?: string;
+  comments?: { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[];
+  reactions?: { emoji: string; accountId: string; authorName: string; createdAt: Date }[];
 }): ExpenseDTO {
   return {
     _id: e._id.toString(),
@@ -31,6 +33,19 @@ function toDTO(e: {
     notes: e.notes,
     description: e.description,
     billImage: e.billImage,
+    comments: (e.comments ?? []).map((c) => ({
+      _id: c._id.toString(),
+      accountId: c.accountId,
+      authorName: c.authorName,
+      text: c.text,
+      createdAt: c.createdAt.toISOString(),
+    })),
+    reactions: (e.reactions ?? []).map((r) => ({
+      emoji: r.emoji,
+      accountId: r.accountId,
+      authorName: r.authorName,
+      createdAt: r.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -75,6 +90,8 @@ export async function listExpenses(filters: ExpenseListFilters): Promise<Expense
       notes: e.notes,
       description: e.description,
       billImage: e.billImage,
+      comments: e.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
+      reactions: e.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
     }),
   );
 }
@@ -95,6 +112,8 @@ export async function getExpenseById(id: string): Promise<ExpenseDTO | null> {
     notes: e.notes,
     description: e.description,
     billImage: e.billImage,
+    comments: e.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
+    reactions: e.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
   });
 }
 
@@ -116,6 +135,8 @@ export async function createExpense(input: CreateExpenseInput): Promise<ExpenseD
     notes: input.notes,
     description: input.description,
     ...(bill ? { billImage: bill } : {}),
+    comments: [],
+    reactions: [],
   });
   await recomputeAllUserBalances();
   return toDTO(doc);
@@ -186,6 +207,8 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
     notes: doc.notes,
     description: doc.description,
     billImage: doc.billImage,
+    comments: doc.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
+    reactions: doc.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
   });
 }
 
@@ -195,4 +218,81 @@ export async function deleteExpense(id: string): Promise<boolean> {
   if (res.deletedCount === 0) return false;
   await recomputeAllUserBalances();
   return true;
+}
+
+export async function addExpenseComment(input: {
+  expenseId: string;
+  accountId: string;
+  authorName: string;
+  text: string;
+}): Promise<ExpenseDTO | null> {
+  await connectDb();
+  const text = input.text.trim();
+  if (text.length < 1) throw new Error("Comment cannot be empty");
+  if (text.length > 800) throw new Error("Comment too long");
+  const doc = await Expense.findByIdAndUpdate(
+    input.expenseId,
+    {
+      $push: {
+        comments: {
+          accountId: input.accountId,
+          authorName: input.authorName,
+          text,
+          createdAt: new Date(),
+        },
+      },
+    },
+    { new: true },
+  ).lean();
+  if (!doc) return null;
+  return toDTO({
+    _id: doc._id,
+    title: doc.title,
+    amount: doc.amount,
+    category: doc.category,
+    paidBy: doc.paidBy,
+    splitEnabled: doc.splitEnabled,
+    splitBetween: doc.splitBetween,
+    date: doc.date,
+    notes: doc.notes,
+    description: doc.description,
+    billImage: doc.billImage,
+    comments: doc.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
+    reactions: doc.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
+  });
+}
+
+export async function toggleExpenseReaction(input: {
+  expenseId: string;
+  accountId: string;
+  authorName: string;
+  emoji: string;
+}): Promise<ExpenseDTO | null> {
+  await connectDb();
+  const doc = await Expense.findById(input.expenseId).lean();
+  if (!doc) return null;
+  const reactions =
+    (doc.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined) ?? [];
+  const idx = reactions.findIndex((r) => r.accountId === input.accountId && r.emoji === input.emoji);
+  if (idx >= 0) {
+    await Expense.updateOne(
+      { _id: input.expenseId },
+      { $pull: { reactions: { accountId: input.accountId, emoji: input.emoji } } },
+    );
+  } else {
+    await Expense.updateOne(
+      { _id: input.expenseId },
+      {
+        $push: {
+          reactions: {
+            emoji: input.emoji,
+            accountId: input.accountId,
+            authorName: input.authorName,
+            createdAt: new Date(),
+          },
+        },
+      },
+    );
+  }
+  return getExpenseById(input.expenseId);
 }

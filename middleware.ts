@@ -2,7 +2,7 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const pagePrefixes = ["/dashboard", "/expenses", "/users", "/reports", "/onboarding", "/audit-logs"];
+const pagePrefixes = ["/dashboard", "/expenses", "/users", "/reports", "/onboarding", "/audit-logs", "/notification-events", "/api-docs"];
 
 function isProtectedPage(path: string) {
   return pagePrefixes.some((p) => path === p || path.startsWith(`${p}/`));
@@ -19,7 +19,9 @@ function isProtectedApi(path: string) {
     path.startsWith("/api/report") ||
     path.startsWith("/api/house") ||
     path.startsWith("/api/onboarding") ||
-    path.startsWith("/api/audit-logs")
+    path.startsWith("/api/audit-logs") ||
+    path.startsWith("/api/notification-events") ||
+    path.startsWith("/api/openapi")
   );
 }
 
@@ -79,6 +81,10 @@ export const config = {
     "/onboarding/:path*",
     "/audit-logs",
     "/audit-logs/:path*",
+    "/notification-events",
+    "/notification-events/:path*",
+    "/api-docs",
+    "/api-docs/:path*",
     "/api/dashboard",
     "/api/dashboard/:path*",
     "/api/expenses",
@@ -95,5 +101,9 @@ export const config = {
     "/api/onboarding/:path*",
     "/api/audit-logs",
     "/api/audit-logs/:path*",
+    "/api/notification-events",
+    "/api/notification-events/:path*",
+    "/api/openapi",
+    "/api/openapi/:path*",
   ],
 };

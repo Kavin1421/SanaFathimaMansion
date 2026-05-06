@@ -1,153 +1,133 @@
-# SanaFathima Mansion - Product Review and Feature Roadmap
+# SanaFathima Mansion - Product Review and Roadmap (Updated)
 
-Date: 2026-05-06  
-Scope: Product feature suggestions + risk analysis (critical/high/medium) for current codebase.
-
----
-
-## Executive Summary
-
-The project is already strong in core shared-expense flows (expenses, balances, settlements, audit logs, WhatsApp, invite + activation, PWA).  
-Main gaps now are around **role model consistency**, **settlement authorization rules**, and **operational hardening** (cron/security/reliability).
-
-Highest-value next moves:
-1. Fix onboarding/admin-role mismatch (showstopper risk).
-2. Add settlement permission policy + approval mode.
-3. Add resilience and governance (rate limits, idempotency, retention, alerting).
-4. Ship engagement improvements (nudge intelligence, streaks, predictive budget alerts).
+Date: 2026-05-07  
+Scope: Current-state analysis, remaining risks, and next interaction-focused product features.
 
 ---
 
-## Critical / Showstopper Findings
+## Current Status Snapshot
 
-### 1) Onboarding can be blocked by super-admin-only invite rule
-- **Why critical**: onboarding currently calls `createUserAction`, and this action now requires super admin. If first-time onboarding user is not super admin, roommate creation can fail and setup stalls.
-- **Impact**: first-run setup breakage for non-super-admin accounts.
-- **Recommendation**:
-  - Allow `createUserAction` during onboarding context (`session.user.onboardingCompleted === false`), OR
-  - Introduce dedicated `createUserOnboardingAction` with restricted scope and clear audit event.
+Implemented recently (good progress):
+- Invite lifecycle with `invited/active` user states and resend invite action.
+- Settlement authorization policy (participant-or-super-admin) at API + UI level.
+- Expanded audit coverage including denied/validation/failed attempts.
+- Notification telemetry model + APIs + admin page.
+- OpenAPI/Swagger docs route and page (developer-only URL access).
 
-### 2) Settlement endpoint allows any authenticated user to settle any pair
-- **Why critical/high**: current settlement action does not enforce that initiator is involved in the settlement pair or has elevated role.
-- **Impact**: a random logged-in user can mark others as settled, mutating balances.
-- **Recommendation**:
-  - Policy: only `fromUser`, `toUser`, or super admin can settle.
-  - Optional: require confirmation workflow for non-admin.
-  - Audit actor + reason + source (UI/API).
+This means most earlier Phase-1 correctness concerns are now resolved.
 
 ---
 
-## High Risk Findings
+## Updated Risk Analysis
 
-### 3) Cron endpoints rely only on shared secret header
-- **Risk**: replay/brute-force attempts and accidental abuse.
-- **Recommendation**:
-  - Add HMAC signature with timestamp (short validity window).
-  - Add rate limiting + optional IP allowlist.
-  - Add idempotency key per job run.
+## Critical / Showstopper
 
-### 4) Atomicity gaps in multi-step operations
-- **Risk**: settlement create + recompute + notifications are separate steps; partial failures can produce inconsistent user-facing state.
-- **Recommendation**:
-  - Use transaction boundaries where possible for DB-mutating steps.
-  - Apply outbox pattern for notifications (retryable, durable queue).
-
-### 5) Audit log data can grow quickly without retention strategy
-- **Risk**: storage/queries degrade over time.
-- **Recommendation**:
-  - Define retention policy (e.g., archive old logs after N months).
-  - Add index review + pagination constraints + export pipeline.
+At this moment, no obvious active showstopper is visible in core flows.
 
 ---
 
-## Medium Risk / Quality Findings
+## High Priority Risks (Still Open)
 
-### 6) Invite lifecycle may confuse users without join-state UX
-- **Observation**: invite creates ledger user, but auth account may not exist yet.
-- **Recommendation**:
-  - Add "Invitation pending" state with resend invite and last-sent timestamp.
-  - Add explicit "Sign up with invited email" helper in invite email.
+### 1) Cron endpoint security hardening still pending
+- Current cron auth is static `x-cron-secret`.
+- Recommended next: timestamped HMAC signature, replay window, rate limits.
 
-### 7) Email service lacks delivery telemetry
-- **Risk**: silent failures reduce trust.
-- **Recommendation**:
-  - Track `emailSentAt`, `emailProviderMessageId`, failure reason counters.
-  - Expose lightweight admin "delivery health" panel.
+### 2) Multi-step consistency (DB write + notifications)
+- Expense/settlement and notifications are asynchronous and can partially fail.
+- Recommended next: outbox/retry pattern or durable queue worker.
 
-### 8) Audit semantics can be further normalized
-- **Observation**: action names and target types are improving but still expanding.
-- **Recommendation**:
-  - Introduce event taxonomy doc (`actor`, `verb`, `object`, `result`).
-  - Add `requestId` correlation field for tracing across logs.
+### 3) Audit and telemetry retention strategy missing
+- Audit + notification event tables can grow quickly.
+- Recommended next: retention/archive plan, monthly compaction/export.
 
 ---
 
-## Interesting and Suitable New Features
+## Medium Priority Risks
 
-## 1) Smart Settlement Assistant (high value)
-- Auto-suggest optimal settlement time windows based on user activity.
-- One-tap UPI deep links (if users opt in).
-- "Settlement confidence" indicator (how likely balances change soon).
+### 4) API docs exposure governance
+- Docs are protected and removed from UI navigation (good), but still reachable by URL.
+- Recommendation: optional `ENABLE_API_DOCS=true` env gate for production.
 
-## 2) Budget Intelligence (high value)
-- Category-wise projected month-end overshoot.
-- "If you continue this pace" forecast cards.
-- Actionable suggestions (reduce X category by Y).
-
-## 3) Engagement Layer (high value)
-- Monthly badges: "Most Consistent Contributor", "Fast Settler".
-- Streaks for timely settlement.
-- Gentle peer nudge templates (WhatsApp/email prefilled).
-
-## 4) Governance and Trust Features
-- Dual control for sensitive actions (optional second approver for balance overrides).
-- Soft-delete with undo window for expenses/users.
-- Immutable exported audit snapshots (PDF/CSV signed hash).
-
-## 5) Collaboration UX
-- Expense comments and reactions.
-- Receipt OCR (extract merchant/date/amount into draft expense).
-- Split presets ("All", "Except me", "Weekend group").
-
-## 6) Finance Operations
-- Recurring expenses (rent/internet/gas) with reminder and auto-draft.
-- House reserve/wallet contributions tracking separate from spends.
-- "Who usually pays this category" insights.
+### 5) Event taxonomy drift over time
+- Many audit action types are now present.
+- Recommendation: add a small event contract doc (`actionType`, `target.type`, required payload fields).
 
 ---
 
-## Prioritized Roadmap (Practical Sequence)
+## Recommended Next Features (Interaction-Focused)
 
-### Phase 1 - Safety and Correctness (Immediate)
-1. Fix onboarding invite permission mismatch.
-2. Enforce settlement authorization policy.
-3. Add cron hardening (HMAC timestamp + rate limit + idempotency).
+These are high-fit for your household app and increase daily engagement:
 
-### Phase 2 - Reliability and Observability
-1. Notification outbox/retry pipeline.
-2. Email/WhatsApp delivery telemetry.
-3. Audit retention + request correlation IDs.
+## 1) Smart Nudge Composer (highest value interaction)
+- One-click nudge from settlement rows:
+  - Friendly / firm / custom templates.
+  - Auto-fill owed amount + due context.
+- Send via WhatsApp and optionally email from same panel.
 
-### Phase 3 - Product Delight
-1. Smart budget forecasts.
-2. Gamified engagement nudges.
-3. OCR-assisted receipt capture.
+## 2) Conversation Layer on Expenses
+- Per-expense comments ("why this spend", "approved by whom").
+- Emoji reactions for quick acknowledgment.
+- Turns app from tracker -> collaborative workspace.
+
+## 3) Interactive Settlement Room
+- Dedicated screen with:
+  - Pending suggestions
+  - "Propose split change"
+  - "Mark paid" + proof upload
+- Status timeline (proposed, paid, confirmed).
+
+## 4) Reminder Preferences (per user)
+- Quiet hours, channel preference (WhatsApp/email), frequency (daily/weekly).
+- Greatly improves reminder acceptance and reduces spam perception.
+
+## 5) Monthly Story Card (shareable)
+- Auto-generated visual summary:
+  - top spender
+  - category dominance
+  - total saved vs previous month
+- Share directly to WhatsApp.
+
+## 6) Real-time Activity Feed
+- Compact timeline in dashboard:
+  - who added expense
+  - who settled
+  - invites sent/accepted
+- Interaction pattern similar to "team activity" apps.
 
 ---
 
-## Suggested New Audit Events (Optional Next)
+## Suggested Implementation Order
 
-- `INVITE_RESENT`
-- `SETTLEMENT_REJECTED`
-- `NOTIFICATION_RETRY`
-- `CRON_RUN`
-- `CRON_RUN_FAILED`
-- `ROLE_CHANGED`
+### Step A - Safety & Ops
+1. Cron auth hardening.
+2. Add retention policy jobs for audit/notification events.
+3. Add `ENABLE_API_DOCS` env guard.
+
+### Step B - Interaction Core
+1. Smart Nudge Composer.
+2. Expense comments + reactions.
+3. Reminder preferences.
+
+### Step C - Delight & Growth
+1. Monthly story card share.
+2. Real-time activity feed.
+
+---
+
+## Additional Audit Events Worth Adding
+
+- `INVITE_ACCEPTED`
+- `SETTLEMENT_MARKED`
+- `SETTLEMENT_CONFIRMED`
+- `NUDGE_SENT`
+- `COMMENT_ADDED`
+- `REACTION_ADDED`
+- `DOCS_ACCESSED` (optional, super-admin visibility)
 
 ---
 
 ## Final Note
 
-The foundation is product-grade and evolving fast.  
-If Phase 1 items are closed, this can move from "functional tracker" to a robust, trustworthy shared-finance product with strong retention potential.
+The product has moved from "MVP tracker" to a robust system with lifecycle, governance, and observability foundations.  
+The best next multiplier is **interaction design** (nudges, comments, feed, shareable monthly story), which will increase adoption and consistency of settlements.
 

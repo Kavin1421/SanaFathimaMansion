@@ -4,7 +4,7 @@ import { DEFAULT_HOUSE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { useMonthParam } from "@/hooks/use-month";
 import { format, parse } from "date-fns";
-import { BarChart3, LayoutDashboard, Receipt, ScrollText, Users } from "lucide-react";
+import { BarChart3, BellRing, LayoutDashboard, Receipt, ScrollText, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,6 +19,7 @@ const navLinks: {
   { href: "/users", label: "Users", icon: Users },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/audit-logs", label: "Audit logs", icon: ScrollText, superAdminOnly: true },
+  { href: "/notification-events", label: "Notification events", icon: BellRing, superAdminOnly: true },
 ];
 
 export function AppSidebar({

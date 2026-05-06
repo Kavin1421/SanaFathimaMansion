@@ -5,6 +5,7 @@ import { getHouseDisplayName } from "@/lib/house-name";
 import { roundMoney } from "@/lib/ledger";
 import { User } from "@/models/User";
 import { getMonthWalletSnapshot } from "@/services/house-month";
+import { appendNotificationEvent } from "@/services/notification-events";
 import type { ExpenseDTO } from "@/types";
 import { format, parse } from "date-fns";
 
@@ -31,11 +32,26 @@ function appDetailUrl(monthKey: string): string | null {
   return `${base}/expenses?month=${encodeURIComponent(monthKey)}`;
 }
 
-async function post(body: Record<string, unknown>): Promise<void> {
+async function post(input: {
+  body: Record<string, unknown>;
+  eventType: string;
+  recipient?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
   if (!isWhatsAppBotEnabled()) return;
   const base = baseUrl();
   const key = apiKey();
-  if (!base || !key) return;
+  if (!base || !key) {
+    await appendNotificationEvent({
+      channel: "whatsapp",
+      eventType: input.eventType,
+      status: "skipped",
+      recipient: input.recipient,
+      message: "WhatsApp bot URL/API key missing",
+      metadata: input.metadata ?? null,
+    });
+    return;
+  }
 
   try {
     const res = await fetch(`${base}/send-message`, {
@@ -44,22 +60,49 @@ async function post(body: Record<string, unknown>): Promise<void> {
         "Content-Type": "application/json",
         "x-bot-key": key,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(input.body),
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
       const t = await res.text();
       console.error("[whatsapp-notify]", res.status, t);
+      await appendNotificationEvent({
+        channel: "whatsapp",
+        eventType: input.eventType,
+        status: "failed",
+        recipient: input.recipient,
+        message: `HTTP ${res.status}: ${t}`,
+        metadata: input.metadata ?? null,
+      });
+      return;
     }
+    await appendNotificationEvent({
+      channel: "whatsapp",
+      eventType: input.eventType,
+      status: "sent",
+      recipient: input.recipient,
+      metadata: input.metadata ?? null,
+    });
   } catch (e) {
     console.error("[whatsapp-notify]", e);
+    await appendNotificationEvent({
+      channel: "whatsapp",
+      eventType: input.eventType,
+      status: "failed",
+      recipient: input.recipient,
+      message: e instanceof Error ? e.message : "Unknown error",
+      metadata: input.metadata ?? null,
+    });
   }
 }
 
 export function notifyWhatsAppText(text: string): void {
   if (!text.trim()) return;
   if (!isWhatsAppBotEnabled()) return;
-  void post({ type: "text", text: text.trim() });
+  void post({
+    body: { type: "text", text: text.trim() },
+    eventType: "whatsapp_text",
+  });
 }
 
 /**
@@ -101,24 +144,28 @@ export function notifyWhatsAppExpense(
 
       const bill = dto.billImage?.trim();
       await post({
-        type: "expense",
-        appName,
-        title: dto.title,
-        payerName,
-        amount: dto.amount,
-        categoryEmoji,
-        categoryLabel,
-        dateLine,
-        isSplit,
-        splitCount: n,
-        splitShareAmount: sharePer ?? undefined,
-        walletRemaining: remaining,
-        budget,
-        budgetUsagePercent,
-        detailUrl: detailUrl ?? undefined,
-        hasBill: false,
-        variant: mode === "updated" ? "updated" : "created",
-        ...(bill ? { imageUrl: bill } : {}),
+        body: {
+          type: "expense",
+          appName,
+          title: dto.title,
+          payerName,
+          amount: dto.amount,
+          categoryEmoji,
+          categoryLabel,
+          dateLine,
+          isSplit,
+          splitCount: n,
+          splitShareAmount: sharePer ?? undefined,
+          walletRemaining: remaining,
+          budget,
+          budgetUsagePercent,
+          detailUrl: detailUrl ?? undefined,
+          hasBill: false,
+          variant: mode === "updated" ? "updated" : "created",
+          ...(bill ? { imageUrl: bill } : {}),
+        },
+        eventType: mode === "updated" ? "whatsapp_expense_updated" : "whatsapp_expense_created",
+        metadata: { expenseId: dto._id, monthKey },
       });
     } catch (e) {
       console.error("[whatsapp-notify] expense pipeline", e);
@@ -144,22 +191,26 @@ export function notifyWhatsAppSettlementRecorded(
       const monthKey = monthKeyFromDate(new Date());
       const detailUrl = appDetailUrl(monthKey);
       await post({
-        type: "expense",
-        appName,
-        title: "Settlement",
-        payerName: from?.name ?? "?",
-        amount,
-        categoryEmoji: "💸",
-        categoryLabel: "Settlement",
-        dateLine: format(new Date(), "d MMM yyyy"),
-        isSplit: false,
-        splitCount: 1,
-        walletRemaining: null,
-        budget: null,
-        budgetUsagePercent: null,
-        detailUrl: detailUrl ?? undefined,
-        variant: "settlement",
-        settlementToName: to?.name ?? "?",
+        body: {
+          type: "expense",
+          appName,
+          title: "Settlement",
+          payerName: from?.name ?? "?",
+          amount,
+          categoryEmoji: "💸",
+          categoryLabel: "Settlement",
+          dateLine: format(new Date(), "d MMM yyyy"),
+          isSplit: false,
+          splitCount: 1,
+          walletRemaining: null,
+          budget: null,
+          budgetUsagePercent: null,
+          detailUrl: detailUrl ?? undefined,
+          variant: "settlement",
+          settlementToName: to?.name ?? "?",
+        },
+        eventType: "whatsapp_settlement",
+        metadata: { fromUserId, toUserId },
       });
     } catch (e) {
       console.error("[whatsapp-notify] settlement", e);
@@ -181,13 +232,17 @@ export function notifyWhatsAppMonthReset(
       const monthStart = parse(`${monthKey}-01`, "yyyy-MM-dd", new Date());
       const monthLabel = format(monthStart, "MMMM yyyy");
       await post({
-        type: "month_reset",
-        appName,
-        monthKey,
-        monthLabel,
-        budget,
-        detailUrl: detailUrl ?? undefined,
-        carryForwardBalances: options?.carryForwardBalances,
+        body: {
+          type: "month_reset",
+          appName,
+          monthKey,
+          monthLabel,
+          budget,
+          detailUrl: detailUrl ?? undefined,
+          carryForwardBalances: options?.carryForwardBalances,
+        },
+        eventType: "whatsapp_month_reset",
+        metadata: { monthKey, budget },
       });
     } catch (e) {
       console.error("[whatsapp-notify] month reset", e);

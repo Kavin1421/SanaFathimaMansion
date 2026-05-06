@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { renderAppEmail } from "@/lib/email-template";
+import { appendNotificationEvent } from "@/services/notification-events";
 
 function smtpUser(): string | null {
   return process.env.EMAIL_USER?.trim() || null;
@@ -31,10 +32,27 @@ function hasEmailConfig(): boolean {
   return Boolean(smtpUser() && smtpPass());
 }
 
-async function sendHtmlMail(input: { to: string; subject: string; html: string; text: string }): Promise<void> {
+async function sendHtmlMail(input: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  eventType: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
   const user = smtpUser();
   const pass = smtpPass();
-  if (!user || !pass) return;
+  if (!user || !pass) {
+    await appendNotificationEvent({
+      channel: "email",
+      eventType: input.eventType,
+      status: "skipped",
+      recipient: input.to,
+      message: "EMAIL_USER/EMAIL_PASSWORD not configured",
+      metadata: input.metadata ?? null,
+    });
+    return;
+  }
   const port = smtpPort();
   const transporter = nodemailer.createTransport({
     host: smtpHost(),
@@ -42,13 +60,32 @@ async function sendHtmlMail(input: { to: string; subject: string; html: string; 
     secure: isSecurePort(port),
     auth: { user, pass },
   });
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM?.trim() || user,
-    to: input.to,
-    subject: input.subject,
-    html: input.html,
-    text: input.text,
-  });
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM?.trim() || user,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    });
+    await appendNotificationEvent({
+      channel: "email",
+      eventType: input.eventType,
+      status: "sent",
+      recipient: input.to,
+      metadata: input.metadata ?? null,
+    });
+  } catch (e) {
+    await appendNotificationEvent({
+      channel: "email",
+      eventType: input.eventType,
+      status: "failed",
+      recipient: input.to,
+      message: e instanceof Error ? e.message : "Email send failed",
+      metadata: input.metadata ?? null,
+    });
+    throw e;
+  }
 }
 
 export async function sendInviteEmail(input: {
@@ -81,7 +118,14 @@ Join now: ${appUrl}
 
 Let's keep things clear and fair.
 - Team Godevs (Kavin)`;
-  await sendHtmlMail({ to: input.to, subject, html, text });
+  await sendHtmlMail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    eventType: "invite_email",
+    metadata: { houseName: input.houseName },
+  });
 }
 
 export async function sendBalanceReminderEmail(input: {
@@ -102,7 +146,14 @@ export async function sendBalanceReminderEmail(input: {
     ctaHref: appUrl,
   });
   const text = `Hi ${input.name}, you currently owe ₹${input.amountOwed.toLocaleString("en-IN")} in ${input.houseName}. Open dashboard: ${appUrl}`;
-  await sendHtmlMail({ to: input.to, subject, html, text });
+  await sendHtmlMail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    eventType: "balance_reminder_email",
+    metadata: { houseName: input.houseName, amountOwed: input.amountOwed },
+  });
 }
 
 export async function sendMonthlySummaryEmail(input: {
@@ -138,5 +189,59 @@ export async function sendMonthlySummaryEmail(input: {
 - Top spender: ${input.topSpender}
 - Balance: ${remaining}
 Open dashboard: ${appUrl}`;
-  await sendHtmlMail({ to: input.to, subject, html, text });
+  await sendHtmlMail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    eventType: "monthly_summary_email",
+    metadata: {
+      houseName: input.houseName,
+      monthLabel: input.monthLabel,
+      totalExpenses: input.totalExpenses,
+      topSpender: input.topSpender,
+      remainingBalance: input.remainingBalance,
+    },
+  });
+}
+
+export async function sendSettlementNudgeEmail(input: {
+  to: string;
+  debtorName: string;
+  creditorName: string;
+  amount: number;
+  customMessage?: string;
+}): Promise<void> {
+  if (!hasEmailConfig()) return;
+  const appUrl = `${appBaseUrl()}/dashboard`;
+  const subject = `Reminder: ${input.debtorName}, pending settlement`;
+  const html = renderAppEmail({
+    title: "Friendly settlement reminder",
+    greeting: `Hi ${input.debtorName},`,
+    lead:
+      input.customMessage?.trim() ||
+      `You currently owe ${input.creditorName} ₹${input.amount.toLocaleString("en-IN")}.`,
+    bullets: [
+      `Amount due: ₹${input.amount.toLocaleString("en-IN")}`,
+      `Pay to: ${input.creditorName}`,
+      "After transfer, tap Mark as Settled in app.",
+    ],
+    ctaLabel: "Open Dashboard",
+    ctaHref: appUrl,
+  });
+  const text = `Hi ${input.debtorName},
+${input.customMessage?.trim() || `You currently owe ${input.creditorName} ₹${input.amount.toLocaleString("en-IN")}.`}
+Open dashboard: ${appUrl}`;
+  await sendHtmlMail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    eventType: "settlement_nudge_email",
+    metadata: {
+      debtorName: input.debtorName,
+      creditorName: input.creditorName,
+      amount: input.amount,
+    },
+  });
 }

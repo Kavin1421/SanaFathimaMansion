@@ -14,7 +14,7 @@ import {
   type UpdateUserInput,
 } from "@/lib/validation";
 import { appendAuditLog } from "@/services/audit-log";
-import { createUser, deleteUser, getUserById, updateUser } from "@/services/users";
+import { createUser, deleteUser, getUserById, markUserInviteResent, updateUser } from "@/services/users";
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -36,7 +36,8 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionRe
     } catch {}
     return { ok: false, error: "Unauthorized" };
   }
-  if (!isAdminSession(session)) {
+  const allowDuringOnboarding = session.user.onboardingCompleted === false;
+  if (!isAdminSession(session) && !allowDuringOnboarding) {
     try {
       await appendAuditLog({
         actionType: "ACCESS_DENIED",
@@ -224,5 +225,42 @@ export async function deleteUserAction(id: string): Promise<ActionResult<null>> 
       });
     } catch {}
     return { ok: false, error: "Could not delete roommate" };
+  }
+}
+
+export async function resendInviteAction(userId: string): Promise<ActionResult<{ userId: string }>> {
+  const session = await requireUserSession();
+  if (!session) {
+    return { ok: false, error: "Unauthorized" };
+  }
+  if (!isAdminSession(session)) {
+    return { ok: false, error: "Only a super admin can resend invites" };
+  }
+  try {
+    const user = await getUserById(userId);
+    if (!user) return { ok: false, error: "User not found" };
+    const houseName = await getHouseDisplayName();
+    await sendInviteEmail({
+      to: user.email,
+      name: user.name,
+      houseName,
+    });
+    await markUserInviteResent(userId);
+    try {
+      await appendAuditLog({
+        actionType: "RESEND_INVITE",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "user", id: user._id, label: user.name },
+        newValue: toAuditJson({ email: user.email }),
+      });
+    } catch (e) {
+      console.error("[audit] resend invite", e);
+    }
+    revalidatePath("/users");
+    revalidatePath("/audit-logs");
+    return { ok: true, data: { userId } };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Could not resend invite" };
   }
 }

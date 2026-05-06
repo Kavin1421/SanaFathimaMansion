@@ -7,6 +7,8 @@ export type UserDTO = {
   name: string;
   email: string;
   status: "invited" | "active" | "disabled";
+  invitedAt?: string;
+  activatedAt?: string;
   avatar?: string;
   totalPaid: number;
   balance: number;
@@ -24,6 +26,19 @@ export type ExpenseDTO = {
   notes?: string;
   description?: string;
   billImage?: string;
+  comments?: {
+    _id: string;
+    accountId: string;
+    authorName: string;
+    text: string;
+    createdAt: string;
+  }[];
+  reactions?: {
+    emoji: string;
+    accountId: string;
+    authorName: string;
+    createdAt: string;
+  }[];
 };
 
 export type SettlementDTO = {

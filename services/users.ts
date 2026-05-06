@@ -9,6 +9,8 @@ function toDTO(u: {
   name: string;
   email: string;
   status: "invited" | "active" | "disabled";
+  invitedAt?: Date;
+  activatedAt?: Date;
   avatar?: string;
   totalPaid: number;
   balance: number;
@@ -18,6 +20,8 @@ function toDTO(u: {
     name: u.name,
     email: u.email,
     status: u.status,
+    invitedAt: u.invitedAt?.toISOString(),
+    activatedAt: u.activatedAt?.toISOString(),
     avatar: u.avatar,
     totalPaid: u.totalPaid,
     balance: u.balance,
@@ -33,6 +37,8 @@ export async function getUserById(id: string): Promise<UserDTO | null> {
     name: u.name,
     email: u.email,
     status: u.status,
+    invitedAt: u.invitedAt,
+    activatedAt: u.activatedAt,
     avatar: u.avatar,
     totalPaid: u.totalPaid,
     balance: u.balance,
@@ -48,6 +54,8 @@ export async function listUsers(): Promise<UserDTO[]> {
       name: u.name,
       email: u.email,
       status: u.status,
+      invitedAt: u.invitedAt,
+      activatedAt: u.activatedAt,
       avatar: u.avatar,
       totalPaid: u.totalPaid,
       balance: u.balance,
@@ -102,6 +110,8 @@ export async function updateUser(input: UpdateUserInput): Promise<UserDTO | null
     name: doc.name,
     email: doc.email,
     status: doc.status,
+    invitedAt: doc.invitedAt,
+    activatedAt: doc.activatedAt,
     avatar: doc.avatar,
     totalPaid: doc.totalPaid,
     balance: doc.balance,
@@ -136,6 +146,29 @@ export async function activateInvitedUserByEmail(emailInput: string): Promise<Us
     name: doc.name,
     email: doc.email,
     status: doc.status,
+    invitedAt: doc.invitedAt,
+    activatedAt: doc.activatedAt,
+    avatar: doc.avatar,
+    totalPaid: doc.totalPaid,
+    balance: doc.balance,
+  });
+}
+
+export async function markUserInviteResent(id: string): Promise<UserDTO | null> {
+  await connectDb();
+  const doc = await User.findByIdAndUpdate(
+    id,
+    { $set: { invitedAt: new Date(), status: "invited" } },
+    { new: true },
+  ).lean();
+  if (!doc) return null;
+  return toDTO({
+    _id: doc._id,
+    name: doc.name,
+    email: doc.email,
+    status: doc.status,
+    invitedAt: doc.invitedAt,
+    activatedAt: doc.activatedAt,
     avatar: doc.avatar,
     totalPaid: doc.totalPaid,
     balance: doc.balance,
