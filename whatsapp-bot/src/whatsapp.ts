@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import qrcode from "qrcode-terminal";
+import qrcode from "qrcode";
 import wweb from "whatsapp-web.js";
 
 type Chat = wweb.Chat;
@@ -62,10 +62,11 @@ export function createWhatsAppClient(): Client {
     },
   });
 
-  client.on("qr", (qr) => {
+  client.on("qr", async (qr) => {
     console.log("[WA_DEBUG] QR RECEIVED");
-    console.log("Scan this QR with WhatsApp (Linked devices):");
-    qrcode.generate(qr, { small: true });
+    const qrUrl = await qrcode.toDataURL(qr);
+    console.log("Scan this QR:");
+    console.log(qrUrl);
   });
 
   client.on("authenticated", () => {
