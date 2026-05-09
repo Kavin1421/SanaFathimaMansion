@@ -1,4 +1,5 @@
 import { existsSync, readdirSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import puppeteer from "puppeteer";
 import qrcode from "qrcode";
@@ -16,6 +17,7 @@ let client: Client | null = null;
 let readyPromise: Promise<void>;
 let resolveReady!: () => void;
 let rejectReady!: (e: Error) => void;
+let chromeInstallPromise: Promise<void> | null = null;
 
 function resetReadyGate() {
   readyPromise = new Promise<void>((res, rej) => {
@@ -99,9 +101,10 @@ export function createWhatsAppClient(): Client {
       return undefined;
     }
   })();
+  const executableExists = detectedExecutablePath ? existsSync(detectedExecutablePath) : false;
   if (detectedExecutablePath) {
     console.log(`[WA_DEBUG] Chrome executable candidate: ${detectedExecutablePath}`);
-    console.log(`[WA_DEBUG] Chrome executable exists: ${existsSync(detectedExecutablePath)}`);
+    console.log(`[WA_DEBUG] Chrome executable exists: ${executableExists}`);
   } else {
     console.warn("[WA_DEBUG] No Chrome executable path resolved");
   }
@@ -109,7 +112,7 @@ export function createWhatsAppClient(): Client {
     authStrategy: new wweb.LocalAuth({ dataPath: getDataPath() }),
     puppeteer: {
       headless: true,
-      executablePath: detectedExecutablePath,
+      executablePath: executableExists ? detectedExecutablePath : undefined,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -186,6 +189,41 @@ export function createWhatsAppClient(): Client {
   return client;
 }
 
+function isMissingChromeError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes("Could not find Chrome") ||
+    message.includes("Browser was not found at the configured executablePath")
+  );
+}
+
+function installChromeIfNeeded(): Promise<void> {
+  if (chromeInstallPromise) {
+    return chromeInstallPromise;
+  }
+  chromeInstallPromise = new Promise<void>((resolvePromise, rejectPromise) => {
+    console.log("[WA_DEBUG] Installing Chrome via Puppeteer fallback...");
+    const child = spawn("npx", ["puppeteer", "browsers", "install", "chrome"], {
+      stdio: "inherit",
+      env: process.env,
+    });
+    child.on("error", (e) => {
+      chromeInstallPromise = null;
+      rejectPromise(e);
+    });
+    child.on("exit", (code) => {
+      if (code === 0) {
+        console.log("[WA_DEBUG] Chrome fallback install complete");
+        resolvePromise();
+      } else {
+        chromeInstallPromise = null;
+        rejectPromise(new Error(`Chrome install failed with exit code ${code}`));
+      }
+    });
+  });
+  return chromeInstallPromise;
+}
+
 let cachedTargetChat: Chat | null = null;
 
 export async function getTargetChat(): Promise<Chat> {
@@ -219,8 +257,23 @@ export async function getTargetChat(): Promise<Chat> {
 export function startWhatsAppClient(): void {
   const wa = createWhatsAppClient();
   console.log("[WA_DEBUG] calling client.initialize()");
-  wa.initialize().catch((err) => {
-    console.error("Failed to initialize WhatsApp client:", err);
-    rejectReady(err instanceof Error ? err : new Error(String(err)));
+  wa.initialize().catch(async (err) => {
+    if (!isMissingChromeError(err)) {
+      console.error("Failed to initialize WhatsApp client:", err);
+      rejectReady(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
+
+    console.warn("[WA_DEBUG] Chrome missing at runtime; attempting one-time install...");
+    try {
+      await installChromeIfNeeded();
+      client = null;
+      const retry = createWhatsAppClient();
+      console.log("[WA_DEBUG] retrying client.initialize() after Chrome install");
+      await retry.initialize();
+    } catch (retryErr) {
+      console.error("Failed to initialize WhatsApp client:", retryErr);
+      rejectReady(retryErr instanceof Error ? retryErr : new Error(String(retryErr)));
+    }
   });
 }
