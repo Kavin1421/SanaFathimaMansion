@@ -9,8 +9,17 @@ type Chat = wweb.Chat;
 type Client = wweb.Client;
 
 function getDataPath(): string {
-  const rel = process.env.WWEBJS_DATA_PATH?.trim() || ".wwebjs_auth";
-  return resolve(process.cwd(), rel);
+  const fromEnv = process.env.WWEBJS_DATA_PATH?.trim();
+  if (fromEnv) {
+    return resolve(process.cwd(), fromEnv);
+  }
+
+  const renderDiskPath = process.env.RENDER_DISK_PATH?.trim();
+  if (renderDiskPath) {
+    return join(renderDiskPath, "whatsapp-auth");
+  }
+
+  return resolve(process.cwd(), ".wwebjs_auth");
 }
 
 let client: Client | null = null;
@@ -48,6 +57,8 @@ export function createWhatsAppClient(): Client {
     return client;
   }
 
+  const authDataPath = getDataPath();
+  console.log(`[WA_DEBUG] LocalAuth data path: ${authDataPath}`);
   const detectedExecutablePath = (() => {
     if (process.env.PUPPETEER_EXECUTABLE_PATH?.trim()) {
       return process.env.PUPPETEER_EXECUTABLE_PATH.trim();
@@ -109,7 +120,10 @@ export function createWhatsAppClient(): Client {
     console.warn("[WA_DEBUG] No Chrome executable path resolved");
   }
   client = new wweb.Client({
-    authStrategy: new wweb.LocalAuth({ dataPath: getDataPath() }),
+    authStrategy: new wweb.LocalAuth({
+      clientId: process.env.WWEBJS_CLIENT_ID?.trim() || "render-bot",
+      dataPath: authDataPath,
+    }),
     puppeteer: {
       headless: true,
       executablePath: executableExists ? detectedExecutablePath : undefined,
