@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import mongoose from "mongoose";
@@ -16,6 +16,49 @@ let resolveReady!: () => void;
 let rejectReady!: (e: Error) => void;
 let chromeInstallPromise: Promise<void> | null = null;
 let mongoConnectPromise: Promise<void> | null = null;
+
+function getRemoteAuthDataPath(): string {
+  const fromEnv = process.env.WWEBJS_REMOTE_DATA_PATH?.trim();
+  const base = fromEnv ? join(process.cwd(), fromEnv) : join(process.cwd(), ".wwebjs_remote_auth");
+  mkdirSync(base, { recursive: true });
+  return base;
+}
+
+async function saveSessionZipFromDataPath(
+  sessionName: string,
+  dataPath: string,
+): Promise<void> {
+  const zipPath = join(dataPath, `${sessionName}.zip`);
+  if (!existsSync(zipPath)) {
+    throw new Error(`RemoteAuth zip not found at ${zipPath}`);
+  }
+
+  const db = mongoose.connection.db;
+  if (!db) {
+    throw new Error("Mongo connection is not ready for RemoteAuth session save");
+  }
+
+  const bucket = new mongoose.mongo.GridFSBucket(db, {
+    bucketName: `whatsapp-${sessionName}`,
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    createReadStream(zipPath)
+      .pipe(bucket.openUploadStream(`${sessionName}.zip`))
+      .on("error", (err) => reject(err))
+      .on("close", () => resolve());
+  });
+
+  const docs = await bucket.find({ filename: `${sessionName}.zip` }).toArray();
+  if (docs.length > 1) {
+    const newest = docs.reduce((a, b) => (a.uploadDate > b.uploadDate ? a : b));
+    await Promise.all(
+      docs
+        .filter((d) => String(d._id) !== String(newest._id))
+        .map((d) => bucket.delete(d._id)),
+    );
+  }
+}
 
 function resetReadyGate() {
   readyPromise = new Promise<void>((res, rej) => {
@@ -76,6 +119,25 @@ export async function createWhatsAppClient(): Promise<Client> {
   await ensureMongoConnected();
 
   const store = new MongoStore({ mongoose });
+  const remoteClientId = process.env.WWEBJS_CLIENT_ID?.trim() || "render-bot";
+  const backupSyncIntervalMs = Number(process.env.WWEBJS_BACKUP_SYNC_MS || "60000");
+  const remoteAuthDataPath = getRemoteAuthDataPath();
+  const rawSave = store.save.bind(store) as (options: { session: string }) => Promise<void>;
+  store.save = (async (options: { session: string }) => {
+    try {
+      await saveSessionZipFromDataPath(options.session, remoteAuthDataPath);
+    } catch (err) {
+      console.warn(
+        `[WA_DEBUG] Custom save failed, falling back to default MongoStore.save: ${String(err)}`,
+      );
+      await rawSave(options);
+    }
+  }) as typeof store.save;
+  console.log(`WWEBJS_CLIENT_ID=${remoteClientId}`);
+  console.log(`[WA_DEBUG] RemoteAuth data path: ${remoteAuthDataPath}`);
+  console.log(`[WA_DEBUG] RemoteAuth backup sync interval: ${backupSyncIntervalMs}ms`);
+  let qrSeenDuringBoot = false;
+  console.log(`[WA_DEBUG] Using RemoteAuth + MongoStore (clientId: ${remoteClientId})`);
   const detectedExecutablePath = (() => {
     if (process.env.PUPPETEER_EXECUTABLE_PATH?.trim()) {
       return process.env.PUPPETEER_EXECUTABLE_PATH.trim();
@@ -139,8 +201,9 @@ export async function createWhatsAppClient(): Promise<Client> {
   client = new wweb.Client({
     authStrategy: new wweb.RemoteAuth({
       store,
-      clientId: process.env.WWEBJS_CLIENT_ID?.trim() || "render-bot",
-      backupSyncIntervalMs: 300000,
+      clientId: remoteClientId,
+      dataPath: remoteAuthDataPath,
+      backupSyncIntervalMs,
     }),
     puppeteer: {
       headless: true,
@@ -158,6 +221,7 @@ export async function createWhatsAppClient(): Promise<Client> {
   });
 
   client.on("qr", async (qr) => {
+    qrSeenDuringBoot = true;
     console.log("[WA] QR RECEIVED (first time only)");
     try {
       const qrUrl = await qrcode.toDataURL(qr);
@@ -207,6 +271,9 @@ export async function createWhatsAppClient(): Promise<Client> {
     //   }
     // })();
 
+    if (!qrSeenDuringBoot) {
+      console.log("[WA] Session loaded");
+    }
     console.log("[WA] READY");
     console.log("WhatsApp client ready");
     resolveReady();

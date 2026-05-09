@@ -110,3 +110,4 @@ See `whatsapp-bot/` for QR login, group id, and bot env.
 ## License
 
 Private project — see repository owner for terms of use.
+PIDS=$(lsof -tiTCP:3001 -sTCP:LISTEN); [ -n "$PIDS" ] && kill $PIDS && sleep 1 && kill -9 $(lsof -tiTCP:3001 -sTCP:LISTEN) 2>/dev/null
