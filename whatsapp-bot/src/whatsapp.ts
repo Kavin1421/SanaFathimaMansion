@@ -1,32 +1,21 @@
 import { existsSync, readdirSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import mongoose from "mongoose";
 import puppeteer from "puppeteer";
 import qrcode from "qrcode";
 import wweb from "whatsapp-web.js";
+import { MongoStore } from "wwebjs-mongo";
 
 type Chat = wweb.Chat;
 type Client = wweb.Client;
-
-function getDataPath(): string {
-  const fromEnv = process.env.WWEBJS_DATA_PATH?.trim();
-  if (fromEnv) {
-    return resolve(process.cwd(), fromEnv);
-  }
-
-  const renderDiskPath = process.env.RENDER_DISK_PATH?.trim();
-  if (renderDiskPath) {
-    return join(renderDiskPath, "whatsapp-auth");
-  }
-
-  return resolve(process.cwd(), ".wwebjs_auth");
-}
 
 let client: Client | null = null;
 let readyPromise: Promise<void>;
 let resolveReady!: () => void;
 let rejectReady!: (e: Error) => void;
 let chromeInstallPromise: Promise<void> | null = null;
+let mongoConnectPromise: Promise<void> | null = null;
 
 function resetReadyGate() {
   readyPromise = new Promise<void>((res, rej) => {
@@ -52,13 +41,41 @@ export function getClient(): Client {
   return client;
 }
 
-export function createWhatsAppClient(): Client {
+async function ensureMongoConnected(): Promise<void> {
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+  if (mongoConnectPromise) {
+    return mongoConnectPromise;
+  }
+
+  const mongoUrl = process.env.MONGO_URL?.trim();
+  if (!mongoUrl) {
+    throw new Error("Set MONGO_URL for WhatsApp RemoteAuth session storage");
+  }
+
+  const dbName = process.env.MONGO_DB_NAME?.trim() || undefined;
+  mongoConnectPromise = mongoose
+    .connect(mongoUrl, { dbName })
+    .then(() => {
+      console.log(`[WA_DEBUG] Mongo connected${dbName ? ` (db: ${dbName})` : ""}`);
+    })
+    .catch((e) => {
+      mongoConnectPromise = null;
+      throw e;
+    });
+
+  return mongoConnectPromise;
+}
+
+export async function createWhatsAppClient(): Promise<Client> {
   if (client) {
     return client;
   }
 
-  const authDataPath = getDataPath();
-  console.log(`[WA_DEBUG] LocalAuth data path: ${authDataPath}`);
+  await ensureMongoConnected();
+
+  const store = new MongoStore({ mongoose });
   const detectedExecutablePath = (() => {
     if (process.env.PUPPETEER_EXECUTABLE_PATH?.trim()) {
       return process.env.PUPPETEER_EXECUTABLE_PATH.trim();
@@ -120,9 +137,10 @@ export function createWhatsAppClient(): Client {
     console.warn("[WA_DEBUG] No Chrome executable path resolved");
   }
   client = new wweb.Client({
-    authStrategy: new wweb.LocalAuth({
+    authStrategy: new wweb.RemoteAuth({
+      store,
       clientId: process.env.WWEBJS_CLIENT_ID?.trim() || "render-bot",
-      dataPath: authDataPath,
+      backupSyncIntervalMs: 300000,
     }),
     puppeteer: {
       headless: true,
@@ -140,7 +158,7 @@ export function createWhatsAppClient(): Client {
   });
 
   client.on("qr", async (qr) => {
-    console.log("[WA] QR RECEIVED");
+    console.log("[WA] QR RECEIVED (first time only)");
     try {
       const qrUrl = await qrcode.toDataURL(qr);
       console.log("\nOpen this in browser to scan:\n");
@@ -151,11 +169,15 @@ export function createWhatsAppClient(): Client {
   });
 
   client.on("authenticated", () => {
-    console.log("[WA] AUTHENTICATED");
+    console.log("[WA] Session authenticated & saved to MongoDB");
+  });
+
+  client.on("remote_session_saved", () => {
+    console.log("[WA] Session successfully stored in MongoDB");
   });
 
   client.on("auth_failure", (msg) => {
-    console.error("[WA] AUTH FAILURE:", msg);
+    console.error("[WA] Auth failure:", msg);
     rejectReady(new Error(`Auth failure: ${msg}`));
   });
 
@@ -191,7 +213,7 @@ export function createWhatsAppClient(): Client {
   });
 
   client.on("disconnected", (reason) => {
-    console.warn("[WA] DISCONNECTED:", reason);
+    console.warn("[WA] Disconnected:", reason);
     resetReadyGate();
   });
 
@@ -269,25 +291,32 @@ export async function getTargetChat(): Promise<Chat> {
 }
 
 export function startWhatsAppClient(): void {
-  const wa = createWhatsAppClient();
-  console.log("[WA_DEBUG] calling client.initialize()");
-  wa.initialize().catch(async (err) => {
-    if (!isMissingChromeError(err)) {
-      console.error("Failed to initialize WhatsApp client:", err);
-      rejectReady(err instanceof Error ? err : new Error(String(err)));
-      return;
-    }
-
-    console.warn("[WA_DEBUG] Chrome missing at runtime; attempting one-time install...");
+  void (async () => {
+    const wa = await createWhatsAppClient();
+    console.log("[WA_DEBUG] calling client.initialize()");
     try {
-      await installChromeIfNeeded();
-      client = null;
-      const retry = createWhatsAppClient();
-      console.log("[WA_DEBUG] retrying client.initialize() after Chrome install");
-      await retry.initialize();
-    } catch (retryErr) {
-      console.error("Failed to initialize WhatsApp client:", retryErr);
-      rejectReady(retryErr instanceof Error ? retryErr : new Error(String(retryErr)));
+      await wa.initialize();
+    } catch (err) {
+      if (!isMissingChromeError(err)) {
+        console.error("Failed to initialize WhatsApp client:", err);
+        rejectReady(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
+
+      console.warn("[WA_DEBUG] Chrome missing at runtime; attempting one-time install...");
+      try {
+        await installChromeIfNeeded();
+        client = null;
+        const retry = await createWhatsAppClient();
+        console.log("[WA_DEBUG] retrying client.initialize() after Chrome install");
+        await retry.initialize();
+      } catch (retryErr) {
+        console.error("Failed to initialize WhatsApp client:", retryErr);
+        rejectReady(retryErr instanceof Error ? retryErr : new Error(String(retryErr)));
+      }
     }
+  })().catch((err) => {
+    console.error("Failed to initialize WhatsApp client:", err);
+    rejectReady(err instanceof Error ? err : new Error(String(err)));
   });
 }

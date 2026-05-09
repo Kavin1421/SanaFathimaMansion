@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import express from "express";
+import type { Server } from "node:http";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sendMessageRouter } from "./routes/send-message.js";
@@ -34,8 +35,10 @@ app.get("/health", (_req, res) => {
 
 app.use(sendMessageRouter());
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${rawPort}`);
+let hasStartedWhatsApp = false;
+
+function onServerListening(listenPort: number): void {
+  console.log(`Server running on port ${listenPort}`);
   console.log("POST /send-message with header x-bot-key and JSON body");
   if (process.env.PUPPETEER_CACHE_DIR) {
     console.log(`Puppeteer cache dir: ${process.env.PUPPETEER_CACHE_DIR}`);
@@ -43,11 +46,35 @@ app.listen(PORT, "0.0.0.0", () => {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     console.log(`Puppeteer executable path: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
   }
-  console.log("[WA_DEBUG] scheduling WhatsApp initialization in background");
-  setImmediate(() => {
-    startWhatsAppClient();
+  if (!hasStartedWhatsApp) {
+    hasStartedWhatsApp = true;
+    console.log("[WA_DEBUG] scheduling WhatsApp initialization in background");
+    setImmediate(() => {
+      startWhatsAppClient();
+    });
+  }
+}
+
+function listenWithFallback(port: number): Server {
+  const server = app.listen(port, "0.0.0.0");
+  server.on("listening", () => {
+    onServerListening(port);
   });
-});
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    const shouldTryNext = !isRender && err.code === "EADDRINUSE";
+    if (shouldTryNext) {
+      const nextPort = port + 1;
+      console.warn(`[BOOT] Port ${port} is in use, retrying on ${nextPort}...`);
+      listenWithFallback(nextPort);
+      return;
+    }
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  });
+  return server;
+}
+
+listenWithFallback(PORT);
 
 waitUntilReady().catch((err) => {
   console.error("WhatsApp did not become ready:", err);
