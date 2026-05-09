@@ -63,16 +63,17 @@ export function createWhatsAppClient(): Client {
   });
 
   client.on("qr", (qr) => {
+    console.log("[WA_DEBUG] QR RECEIVED");
     console.log("Scan this QR with WhatsApp (Linked devices):");
     qrcode.generate(qr, { small: true });
   });
 
   client.on("authenticated", () => {
-    console.log("WhatsApp authenticated");
+    console.log("[WA_DEBUG] authenticated");
   });
 
   client.on("auth_failure", (msg) => {
-    console.error("WhatsApp auth failure:", msg);
+    console.error("[WA_DEBUG] auth_failure:", msg);
     rejectReady(new Error(`Auth failure: ${msg}`));
   });
 
@@ -94,12 +95,13 @@ export function createWhatsAppClient(): Client {
     //   }
     // })();
 
+    console.log("[WA_DEBUG] ready");
     console.log("WhatsApp client ready");
     resolveReady();
   });
 
   client.on("disconnected", (reason) => {
-    console.warn("WhatsApp disconnected:", reason);
+    console.warn("[WA_DEBUG] disconnected:", reason);
     resetReadyGate();
   });
 
@@ -143,6 +145,7 @@ export async function getTargetChat(): Promise<Chat> {
 
 export function startWhatsAppClient(): void {
   const wa = createWhatsAppClient();
+  console.log("[WA_DEBUG] calling client.initialize()");
   wa.initialize().catch((err) => {
     console.error("Failed to initialize WhatsApp client:", err);
     rejectReady(err instanceof Error ? err : new Error(String(err)));

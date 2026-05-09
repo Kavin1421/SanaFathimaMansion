@@ -34,7 +34,7 @@ app.get("/health", (_req, res) => {
 
 app.use(sendMessageRouter());
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${rawPort}`);
   console.log("POST /send-message with header x-bot-key and JSON body");
   if (process.env.PUPPETEER_CACHE_DIR) {
