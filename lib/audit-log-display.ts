@@ -24,6 +24,12 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   UPDATE_USER: "User updated",
   UPDATE_REMINDER_PREFS: "Reminder preferences updated",
   DELETE_USER: "User deleted",
+  CREATE_PRE_BILL: "Pre-bill created",
+  FINALIZE_PRE_BILL: "Pre-bill finalized",
+  DUPLICATE_PRE_BILL: "Pre-bill duplicated",
+  LINK_PRE_BILL_EXPENSE: "Pre-bill linked to expense",
+  DELETE_PRE_BILL: "Pre-bill deleted",
+  UPDATE_FINALIZED_PRE_BILL: "Finalized pre-bill updated",
 };
 
 const TARGET_TYPE_LABELS: Record<string, string> = {
@@ -35,6 +41,7 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   onboarding: "Onboarding",
   settlement: "Settlement",
   budget: "Budget",
+  preBill: "Pre-bill",
 };
 
 export function friendlyActionLabel(action: AuditActionType): string {
@@ -112,6 +119,13 @@ export function auditLogSummaryLine(row: AuditLogRow): string {
     case "CREATE_USER":
     case "DELETE_USER":
       return targetEntity.label?.trim() || (previousValue?.email as string) || (newValue?.email as string) || fallback;
+    case "CREATE_PRE_BILL":
+    case "FINALIZE_PRE_BILL":
+    case "DUPLICATE_PRE_BILL":
+    case "UPDATE_FINALIZED_PRE_BILL":
+    case "LINK_PRE_BILL_EXPENSE":
+    case "DELETE_PRE_BILL":
+      return targetEntity.label?.trim() || fallback;
     default:
       return fallback;
   }

@@ -84,7 +84,7 @@ export const openApiSpec = {
         type: "object",
         properties: {
           _id: { type: "string" },
-          channel: { type: "string", enum: ["email", "whatsapp"] },
+          channel: { type: "string", enum: ["email", "telegram"] },
           eventType: { type: "string" },
           status: { type: "string", enum: ["sent", "failed", "skipped"] },
           recipient: { type: "string", nullable: true },
@@ -243,7 +243,7 @@ export const openApiSpec = {
         tags: ["Notifications"],
         summary: "List notification delivery events (super admin)",
         parameters: [
-          { in: "query", name: "channel", schema: { type: "string", enum: ["email", "whatsapp"] } },
+          { in: "query", name: "channel", schema: { type: "string", enum: ["email", "telegram"] } },
           { in: "query", name: "status", schema: { type: "string", enum: ["sent", "failed", "skipped"] } },
           { in: "query", name: "eventType", schema: { type: "string" } },
           { in: "query", name: "search", schema: { type: "string" } },

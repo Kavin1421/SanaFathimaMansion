@@ -2,7 +2,7 @@ import { connectDb } from "@/lib/db";
 import { NotificationEvent } from "@/models/NotificationEvent";
 
 export async function appendNotificationEvent(input: {
-  channel: "email" | "whatsapp";
+  channel: "email" | "telegram";
   eventType: string;
   status: "sent" | "failed" | "skipped";
   recipient?: string;
@@ -22,7 +22,7 @@ export async function appendNotificationEvent(input: {
 
 export type NotificationEventRow = {
   _id: string;
-  channel: "email" | "whatsapp";
+  channel: "email" | "telegram";
   eventType: string;
   status: "sent" | "failed" | "skipped";
   recipient?: string;
@@ -32,7 +32,7 @@ export type NotificationEventRow = {
 };
 
 export async function listNotificationEvents(params: {
-  channel?: "email" | "whatsapp";
+  channel?: "email" | "telegram";
   status?: "sent" | "failed" | "skipped";
   eventType?: string;
   search?: string;
@@ -63,7 +63,7 @@ export async function listNotificationEvents(params: {
     total,
     rows: rows.map((r) => ({
       _id: String(r._id),
-      channel: r.channel as "email" | "whatsapp",
+      channel: r.channel as "email" | "telegram",
       eventType: String(r.eventType),
       status: r.status as "sent" | "failed" | "skipped",
       recipient: r.recipient ?? undefined,

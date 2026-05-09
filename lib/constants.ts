@@ -22,4 +22,8 @@ export const CATEGORY_META: Record<
 };
 
 export const DEFAULT_HOUSE_NAME =
-  process.env.NEXT_PUBLIC_HOUSE_NAME ?? "SanaFathima Mansion";
+  process.env.NEXT_PUBLIC_HOUSE_NAME ?? "Sana Fathima Mansion";
+
+export const PRE_BILL_UNITS = ["kg", "g", "L", "pcs"] as const;
+
+export type PreBillUnit = (typeof PRE_BILL_UNITS)[number];

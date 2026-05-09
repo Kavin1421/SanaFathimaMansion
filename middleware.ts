@@ -2,7 +2,18 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const pagePrefixes = ["/dashboard", "/expenses", "/settlements", "/users", "/reports", "/onboarding", "/audit-logs", "/notification-events", "/api-docs"];
+const pagePrefixes = [
+  "/dashboard",
+  "/expenses",
+  "/pre-bills",
+  "/settlements",
+  "/users",
+  "/reports",
+  "/onboarding",
+  "/audit-logs",
+  "/notification-events",
+  "/api-docs",
+];
 
 function isProtectedPage(path: string) {
   return pagePrefixes.some((p) => path === p || path.startsWith(`${p}/`));
@@ -22,7 +33,8 @@ function isProtectedApi(path: string) {
     path.startsWith("/api/onboarding") ||
     path.startsWith("/api/audit-logs") ||
     path.startsWith("/api/notification-events") ||
-    path.startsWith("/api/openapi")
+    path.startsWith("/api/openapi") ||
+    path.startsWith("/api/pre-bills")
   );
 }
 
@@ -74,6 +86,8 @@ export const config = {
     "/dashboard/:path*",
     "/expenses",
     "/expenses/:path*",
+    "/pre-bills",
+    "/pre-bills/:path*",
     "/settlements",
     "/settlements/:path*",
     "/users",
@@ -92,6 +106,8 @@ export const config = {
     "/api/dashboard/:path*",
     "/api/expenses",
     "/api/expenses/:path*",
+    "/api/pre-bills",
+    "/api/pre-bills/:path*",
     "/api/settlements",
     "/api/settlements/:path*",
     "/api/users",

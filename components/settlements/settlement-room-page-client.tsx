@@ -95,7 +95,7 @@ export function SettlementRoomPageClient() {
         amount,
         tone: "custom",
         customMessage,
-        channels: { inApp: true, whatsapp: true, email: true },
+        channels: { inApp: true, telegram: true, email: true },
       });
       if (!r.ok) throw new Error(r.error);
       return r.data;

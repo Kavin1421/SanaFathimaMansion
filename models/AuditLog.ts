@@ -11,7 +11,7 @@ export type AuditPerformedBy = {
 };
 
 export type AuditTargetEntity = {
-  type: "expense" | "user" | "month" | "session" | "settlement" | "house" | "onboarding";
+  type: "expense" | "user" | "month" | "session" | "settlement" | "house" | "onboarding" | "preBill";
   id?: string;
   label?: string;
 };
@@ -40,7 +40,7 @@ const targetEntitySchema = new Schema<AuditTargetEntity>(
     type: {
       type: String,
       required: true,
-      enum: ["expense", "user", "month", "session", "settlement", "house", "onboarding"],
+      enum: ["expense", "user", "month", "session", "settlement", "house", "onboarding", "preBill"],
     },
     id: { type: String },
     label: { type: String },

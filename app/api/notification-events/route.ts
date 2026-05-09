@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   const eventType = searchParams.get("eventType") ?? undefined;
   const search = searchParams.get("search") ?? undefined;
   const channel =
-    channelRaw === "email" || channelRaw === "whatsapp" ? channelRaw : undefined;
+    channelRaw === "email" || channelRaw === "telegram" ? channelRaw : undefined;
   const status =
     statusRaw === "sent" || statusRaw === "failed" || statusRaw === "skipped" ? statusRaw : undefined;
 

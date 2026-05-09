@@ -11,7 +11,7 @@ import {
   type CreateExpenseInput,
   type UpdateExpenseInput,
 } from "@/lib/validation";
-import { notifyWhatsAppExpense } from "@/lib/whatsapp-notify";
+import { notifyTelegramExpense } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import {
   addExpenseComment,
@@ -67,7 +67,7 @@ export async function createExpenseAction(
     } catch (e) {
       console.error("[audit] create expense", e);
     }
-    notifyWhatsAppExpense(data, "created");
+    notifyTelegramExpense(data, "created");
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -141,7 +141,7 @@ export async function updateExpenseAction(
     } catch (e) {
       console.error("[audit] update expense", e);
     }
-    notifyWhatsAppExpense(data, "updated");
+    notifyTelegramExpense(data, "updated");
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");

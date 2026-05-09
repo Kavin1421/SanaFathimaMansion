@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { EXPENSE_CATEGORIES, PRE_BILL_UNITS } from "@/lib/constants";
+
+const preBillUnitEnum = z.enum(PRE_BILL_UNITS);
 
 const objectIdString = z.string().min(1);
 
@@ -38,7 +40,7 @@ export const updateReminderPreferencesSchema = z.object({
   frequency: z.enum(["daily", "weekly"]),
   channels: z.object({
     email: z.boolean(),
-    whatsapp: z.boolean(),
+    telegram: z.boolean(),
   }),
   quietHours: z
     .object({
@@ -200,6 +202,45 @@ export const completeSettlementSchema = z.object({
   id: objectIdString,
 });
 
+const preBillItemSchema = z.object({
+  name: z.string().min(1).max(200).trim(),
+  quantity: z.number().positive(),
+  unit: preBillUnitEnum,
+  price: z.number().min(0).optional(),
+});
+
+export const createPreBillSchema = z.object({
+  title: z.string().min(1).max(160).trim(),
+  category: z.enum(EXPENSE_CATEGORIES),
+  notes: z.string().max(4000).optional(),
+  items: z.array(preBillItemSchema).default([]),
+});
+
+export const updatePreBillSchema = z.object({
+  id: objectIdString,
+  title: z.string().min(1).max(160).trim(),
+  category: z.enum(EXPENSE_CATEGORIES),
+  notes: z.string().max(4000).optional(),
+  items: z.array(preBillItemSchema),
+});
+
+export const finalizePreBillSchema = z.object({
+  id: objectIdString,
+});
+
+export const linkPreBillExpenseSchema = z.object({
+  preBillId: objectIdString,
+  expenseId: objectIdString,
+});
+
+export const duplicatePreBillSchema = z.object({
+  id: objectIdString,
+});
+
+export const deletePreBillSchema = z.object({
+  id: objectIdString,
+});
+
 export type RegisterAccountInput = z.infer<typeof registerAccountSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupFormInput = z.infer<typeof signupFormSchema>;
@@ -209,3 +250,8 @@ export type UpdateReminderPreferencesInput = z.infer<typeof updateReminderPrefer
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 export type CreateSettlementInput = z.infer<typeof createSettlementSchema>;
+export type CreatePreBillInput = z.infer<typeof createPreBillSchema>;
+export type UpdatePreBillInput = z.infer<typeof updatePreBillSchema>;
+export type FinalizePreBillInput = z.infer<typeof finalizePreBillSchema>;
+export type LinkPreBillExpenseInput = z.infer<typeof linkPreBillExpenseSchema>;
+export type DeletePreBillInput = z.infer<typeof deletePreBillSchema>;

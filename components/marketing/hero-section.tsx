@@ -95,7 +95,7 @@ export function HeroSection() {
             className="mt-6 max-w-lg text-pretty text-base leading-relaxed text-muted-foreground/90 md:text-lg"
           >
             One calm place for rent, groceries, and everything in between — live balances,
-            one-tap settlements, and optional WhatsApp nudges when the ledger moves.
+            one-tap settlements, and optional Telegram alerts when the ledger moves.
           </motion.p>
           <motion.div
             initial={reduceMotion ? false : { opacity: 0, y: 16 }}

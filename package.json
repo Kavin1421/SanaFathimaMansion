@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
     "migrate:expenses-split": "tsx scripts/migrate-expenses-split.ts",
-    "bot:dev": "npm run dev --prefix whatsapp-bot"
+    "db:clean:dev": "tsx scripts/clean-db-dev.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -29,6 +29,7 @@
     "@radix-ui/react-tabs": "^1.1.2",
     "@react-pdf/renderer": "^4.1.6",
     "@tanstack/react-query": "^5.62.8",
+    "axios": "^1.9.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.5.1",

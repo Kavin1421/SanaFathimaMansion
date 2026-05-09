@@ -62,7 +62,7 @@ export function UsersPageClient() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [prefFrequency, setPrefFrequency] = useState<"daily" | "weekly">("daily");
   const [prefEmail, setPrefEmail] = useState(true);
-  const [prefWhatsApp, setPrefWhatsApp] = useState(true);
+  const [prefTelegram, setPrefTelegram] = useState(true);
   const [prefQuietStart, setPrefQuietStart] = useState("22");
   const [prefQuietEnd, setPrefQuietEnd] = useState("8");
 
@@ -123,7 +123,7 @@ export function UsersPageClient() {
     mutationFn: async (payload: {
       userId: string;
       frequency: "daily" | "weekly";
-      channels: { email: boolean; whatsapp: boolean };
+      channels: { email: boolean; telegram: boolean };
       quietHours: { startHour: number; endHour: number };
     }) => {
       const r = await updateReminderPreferencesAction(payload);
@@ -144,7 +144,7 @@ export function UsersPageClient() {
     if (!myUser?.reminderPreferences) return;
     setPrefFrequency(myUser.reminderPreferences.frequency);
     setPrefEmail(myUser.reminderPreferences.channels.email);
-    setPrefWhatsApp(myUser.reminderPreferences.channels.whatsapp);
+    setPrefTelegram(myUser.reminderPreferences.channels.telegram);
     setPrefQuietStart(String(myUser.reminderPreferences.quietHours.startHour));
     setPrefQuietEnd(String(myUser.reminderPreferences.quietHours.endHour));
   }, [myUser]);
@@ -195,8 +195,8 @@ export function UsersPageClient() {
                 <Button type="button" size="sm" variant={prefEmail ? "default" : "outline"} className="rounded-xl" onClick={() => setPrefEmail((v) => !v)}>
                   Email
                 </Button>
-                <Button type="button" size="sm" variant={prefWhatsApp ? "default" : "outline"} className="rounded-xl" onClick={() => setPrefWhatsApp((v) => !v)}>
-                  WhatsApp
+                <Button type="button" size="sm" variant={prefTelegram ? "default" : "outline"} className="rounded-xl" onClick={() => setPrefTelegram((v) => !v)}>
+                  Telegram
                 </Button>
               </div>
             </div>
@@ -212,12 +212,12 @@ export function UsersPageClient() {
               <Button
                 type="button"
                 className="rounded-xl"
-                disabled={prefMut.isPending || (!prefEmail && !prefWhatsApp)}
+                disabled={prefMut.isPending || (!prefEmail && !prefTelegram)}
                 onClick={() =>
                   prefMut.mutate({
                     userId: myUser._id,
                     frequency: prefFrequency,
-                    channels: { email: prefEmail, whatsapp: prefWhatsApp },
+                    channels: { email: prefEmail, telegram: prefTelegram },
                     quietHours: {
                       startHour: Number(prefQuietStart),
                       endHour: Number(prefQuietEnd),

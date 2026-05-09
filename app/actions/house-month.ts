@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth-options";
 import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { isAdminSession } from "@/lib/admin";
 import { nextMonthKey } from "@/lib/dates";
-import { notifyWhatsAppMonthReset } from "@/lib/whatsapp-notify";
+import { notifyTelegramMonthReset, notifyTelegramWalletBudgetUpdated } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import { getHouseMonthByKey, upsertHouseMonthBudget } from "@/services/house-month";
 import type { ActionResult } from "./users";
@@ -65,6 +65,7 @@ export async function setMonthBudgetAction(
     } catch (e) {
       console.error("[audit] update budget", e);
     }
+    notifyTelegramWalletBudgetUpdated(monthKey, budget);
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -152,7 +153,7 @@ export async function startNewMonthAction(
     } catch (e) {
       console.error("[audit] reset month", e);
     }
-    notifyWhatsAppMonthReset(next, nextBudget, { carryForwardBalances });
+    notifyTelegramMonthReset(next, nextBudget, { carryForwardBalances });
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");

@@ -100,7 +100,7 @@ export async function sendInviteEmail(input: {
     title: "You're invited to SanaFathima Mansion",
     greeting: `Hi ${input.name},`,
     lead: `You've been added to ${input.houseName} expense tracker.`,
-    bullets: ["Track shared expenses", "See who owes whom", "Stay updated via WhatsApp"],
+    bullets: ["Track shared expenses", "See who owes whom", "Stay updated via Telegram"],
     ctaLabel: "Join Now",
     ctaHref: appUrl,
     footnote: "Let's keep things clear and fair. — Team Godevs (Kavin)",
@@ -112,7 +112,7 @@ You've been added to ${input.houseName} expense tracker.
 Now you can:
 - Track shared expenses
 - See who owes whom
-- Stay updated via WhatsApp
+- Stay updated via Telegram
 
 Join now: ${appUrl}
 

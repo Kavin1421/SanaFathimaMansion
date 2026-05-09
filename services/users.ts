@@ -8,6 +8,21 @@ import { Account } from "@/models/Account";
 import { Expense } from "@/models/Expense";
 import { User } from "@/models/User";
 import type { UserDTO } from "@/types";
+
+/** Legacy MongoDB field `channels.whatsapp` maps to `telegram` until migrated. */
+type RawReminderChannels = {
+  email?: boolean;
+  telegram?: boolean;
+  whatsapp?: boolean;
+};
+
+function telegramPreference(ch: RawReminderChannels | undefined): boolean {
+  if (ch == null) return true;
+  if (typeof ch.telegram === "boolean") return ch.telegram;
+  if (typeof ch.whatsapp === "boolean") return ch.whatsapp;
+  return true;
+}
+
 function toDTO(u: {
   _id: { toString(): string };
   name: string;
@@ -17,7 +32,7 @@ function toDTO(u: {
   activatedAt?: Date;
   reminderPreferences?: {
     frequency: "daily" | "weekly";
-    channels: { email: boolean; whatsapp: boolean };
+    channels: RawReminderChannels;
     quietHours: { startHour: number; endHour: number };
   };
   avatar?: string;
@@ -35,8 +50,8 @@ function toDTO(u: {
       ? {
           frequency: u.reminderPreferences.frequency,
           channels: {
-            email: u.reminderPreferences.channels.email,
-            whatsapp: u.reminderPreferences.channels.whatsapp,
+            email: u.reminderPreferences.channels.email ?? true,
+            telegram: telegramPreference(u.reminderPreferences.channels),
           },
           quietHours: {
             startHour: u.reminderPreferences.quietHours.startHour,
@@ -107,7 +122,7 @@ export async function createUser(input: CreateUserInput): Promise<UserDTO> {
     invitedAt: new Date(),
     reminderPreferences: {
       frequency: "daily",
-      channels: { email: true, whatsapp: true },
+      channels: { email: true, telegram: true },
       quietHours: { startHour: 22, endHour: 8 },
     },
     avatar,
@@ -219,7 +234,7 @@ export async function updateReminderPreferences(
           frequency: input.frequency,
           channels: {
             email: input.channels.email,
-            whatsapp: input.channels.whatsapp,
+            telegram: input.channels.telegram,
           },
           quietHours: {
             startHour: input.quietHours.startHour,
@@ -227,6 +242,7 @@ export async function updateReminderPreferences(
           },
         },
       },
+      $unset: { "reminderPreferences.channels.whatsapp": "" },
     },
     { new: true },
   ).lean();

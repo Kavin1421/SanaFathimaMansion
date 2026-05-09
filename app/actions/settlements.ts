@@ -7,7 +7,7 @@ import { isAdminSession } from "@/lib/admin";
 import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { createSettlementSchema, type CreateSettlementInput } from "@/lib/validation";
 import { sendSettlementNudgeEmail } from "@/lib/email";
-import { notifyWhatsAppSettlementRecorded, notifyWhatsAppText } from "@/lib/whatsapp-notify";
+import { notifyTelegramSettlementRecorded, notifyTelegramText } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import { confirmSettlement, listSettlements, recordCompletedSettlement } from "@/services/settlements";
 import { getUserById } from "@/services/users";
@@ -86,7 +86,7 @@ export async function settleAction(
     } catch (e) {
       console.error("[audit] create settlement", e);
     }
-    notifyWhatsAppSettlementRecorded(
+    notifyTelegramSettlementRecorded(
       parsed.data.fromUser,
       parsed.data.toUser,
       parsed.data.amount,
@@ -114,7 +114,7 @@ export async function sendSettlementNudgeAction(input: {
   toUserId: string;
   amount: number;
   tone: "friendly" | "firm" | "custom";
-  channels: { inApp: boolean; whatsapp: boolean; email: boolean };
+  channels: { inApp: boolean; telegram: boolean; email: boolean };
   customMessage?: string;
 }): Promise<ActionResult<null>> {
   const session = await getServerSession(authOptions);
@@ -125,7 +125,7 @@ export async function sendSettlementNudgeAction(input: {
   if (!Number.isFinite(amount) || amount <= 0) {
     return { ok: false, error: "Invalid amount" };
   }
-  if (!input.channels.inApp && !input.channels.whatsapp && !input.channels.email) {
+  if (!input.channels.inApp && !input.channels.telegram && !input.channels.email) {
     return { ok: false, error: "Pick at least one channel" };
   }
   const actorLedgerUserId = session.user.ledgerUserId;
@@ -151,8 +151,8 @@ export async function sendSettlementNudgeAction(input: {
           ? input.customMessage?.trim() || `Hi ${fromUser.name}, this is a reminder to settle ₹${amount.toLocaleString("en-IN")} to ${toUser.name}.`
           : `Hi ${fromUser.name}, friendly reminder to settle ₹${amount.toLocaleString("en-IN")} to ${toUser.name} when possible.`;
 
-    if (input.channels.whatsapp) {
-      notifyWhatsAppText(`🔔 Settlement nudge\n${baseMessage}`);
+    if (input.channels.telegram) {
+      notifyTelegramText(`🔔 Settlement nudge\n${baseMessage}`);
     }
     if (input.channels.email) {
       await sendSettlementNudgeEmail({

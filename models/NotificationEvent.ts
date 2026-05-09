@@ -1,6 +1,6 @@
 import mongoose, { Schema, type Model, type Types } from "mongoose";
 
-export type NotificationChannel = "email" | "whatsapp";
+export type NotificationChannel = "email" | "telegram";
 export type NotificationStatus = "sent" | "failed" | "skipped";
 
 export type NotificationEventDocument = {
@@ -16,7 +16,7 @@ export type NotificationEventDocument = {
 
 const notificationEventSchema = new Schema<NotificationEventDocument>(
   {
-    channel: { type: String, enum: ["email", "whatsapp"], required: true },
+    channel: { type: String, enum: ["email", "telegram"], required: true },
     eventType: { type: String, required: true },
     status: { type: String, enum: ["sent", "failed", "skipped"], required: true },
     recipient: { type: String },

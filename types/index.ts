@@ -1,6 +1,26 @@
-import type { ExpenseCategory } from "@/lib/constants";
+import type { ExpenseCategory, PreBillUnit } from "@/lib/constants";
 
-export type { ExpenseCategory };
+export type { ExpenseCategory, PreBillUnit };
+
+export type PreBillItemDTO = {
+  name: string;
+  quantity: number;
+  unit: PreBillUnit;
+  price?: number;
+};
+
+export type PreBillDTO = {
+  _id: string;
+  title: string;
+  category: ExpenseCategory;
+  notes?: string;
+  createdBy: string;
+  items: PreBillItemDTO[];
+  status: "draft" | "finalized";
+  linkedExpenseId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type UserDTO = {
   _id: string;
@@ -13,7 +33,7 @@ export type UserDTO = {
     frequency: "daily" | "weekly";
     channels: {
       email: boolean;
-      whatsapp: boolean;
+      telegram: boolean;
     };
     quietHours: {
       startHour: number;

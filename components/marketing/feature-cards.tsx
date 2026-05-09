@@ -22,7 +22,7 @@ const features = [
   },
   {
     icon: Bell,
-    title: "WhatsApp-friendly",
+    title: "Telegram-ready",
     body: "Optional pings when expenses change — great for groups that live in chat.",
   },
 ];

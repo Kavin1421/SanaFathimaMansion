@@ -1,6 +1,6 @@
 import { addDays } from "date-fns";
 import { getHouseDisplayName } from "@/lib/house-name";
-import { notifyWhatsAppText } from "@/lib/whatsapp-notify";
+import { notifyTelegramText } from "@/lib/telegram-notify";
 import { monthKeyFromDate } from "@/lib/dates";
 import { connectDb } from "@/lib/db";
 import { sendBalanceReminderEmail, sendMonthlySummaryEmail } from "@/lib/email";
@@ -23,11 +23,11 @@ export async function runDailyBalanceReminders(now = new Date()): Promise<{ remi
   const owing = users.filter((u) => u.balance < -0.01);
 
   let reminded = 0;
-  const whatsappLines: string[] = [];
+  const telegramReminderLines: string[] = [];
   for (const u of owing) {
     const prefs = u.reminderPreferences ?? {
       frequency: "daily",
-      channels: { email: true, whatsapp: true },
+      channels: { email: true, telegram: true },
       quietHours: { startHour: 22, endHour: 8 },
     };
     if (prefs.frequency === "weekly" && now.getDay() !== 1) {
@@ -45,16 +45,20 @@ export async function runDailyBalanceReminders(now = new Date()): Promise<{ remi
         amountOwed: amount,
       });
     }
-    if (prefs.channels.whatsapp) {
-      whatsappLines.push(`• ${u.name} owes ₹${amount.toLocaleString("en-IN")}`);
+    const telegramOn =
+      prefs.channels.telegram ??
+      (prefs.channels as { whatsapp?: boolean }).whatsapp ??
+      true;
+    if (telegramOn) {
+      telegramReminderLines.push(`• ${u.name} owes ₹${amount.toLocaleString("en-IN")}`);
     }
     reminded += 1;
     await User.updateOne({ _id: u._id }, { $set: { lastReminderAt: now } });
   }
 
-  if (whatsappLines.length > 0) {
-    notifyWhatsAppText(
-      `📌 Daily balance reminder\n${whatsappLines.join("\n")}\n\nPlease settle and mark as settled in app.`,
+  if (telegramReminderLines.length > 0) {
+    notifyTelegramText(
+      `📌 Daily balance reminder\n${telegramReminderLines.join("\n")}\n\nPlease settle and mark as settled in app.`,
     );
   }
 
@@ -86,7 +90,7 @@ export async function runMonthlySummaryBroadcast(now = new Date()): Promise<{ se
     sent += 1;
   }
 
-  notifyWhatsAppText(
+  notifyTelegramText(
     `📊 ${summary.monthLabel} summary\nTotal: ₹${summary.totalSpent.toLocaleString("en-IN")}\nTop spender: ${summary.monthlyWinner?.name ?? "N/A"}\nRemaining balance: ${summary.monthRemaining == null ? "N/A" : `₹${summary.monthRemaining.toLocaleString("en-IN")}`}`,
   );
 

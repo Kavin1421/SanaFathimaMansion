@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
-import type { ExpenseDTO, UserDTO } from "@/types";
+import type { ExpenseCategory, ExpenseDTO, UserDTO } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { Loader2 } from "lucide-react";
@@ -33,6 +33,17 @@ type Props = {
   expense: ExpenseDTO | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** Prefill when creating from a finalized pre-bill */
+  preBillSeed?: {
+    title: string;
+    category: ExpenseCategory;
+    notes: string;
+    suggestedAmount?: number;
+  } | null;
+  /** Prefer this payer when opening new expense (e.g. current ledger user) */
+  defaultPaidById?: string;
+  /** Called after a successful create (not update) */
+  onCreated?: (expense: ExpenseDTO) => void;
 };
 
 function FormFields({
@@ -240,7 +251,16 @@ function FormFields({
   );
 }
 
-export function ExpenseFormDialog({ users, monthKey, expense, open, onOpenChange }: Props) {
+export function ExpenseFormDialog({
+  users,
+  monthKey,
+  expense,
+  open,
+  onOpenChange,
+  preBillSeed,
+  defaultPaidById,
+  onCreated,
+}: Props) {
   const qc = useQueryClient();
   const reduceMotion = useReducedMotion();
   const amountRef = useRef<HTMLInputElement>(null);
@@ -271,18 +291,44 @@ export function ExpenseFormDialog({ users, monthKey, expense, open, onOpenChange
       setDescription(expense.description ?? (expense.category === "Others" ? expense.notes ?? "" : ""));
       setBillImage(expense.billImage ?? "");
     } else if (users.length) {
-      setTitle("");
-      setAmount("");
-      setCategory("Groceries");
-      setPaidBy(users[0]._id);
-      setSplitEnabled(true);
-      setSplitIds(new Set(users.map((u) => u._id)));
-      setDateStr(new Date().toISOString().slice(0, 10));
-      setNotes("");
-      setDescription("");
-      setBillImage("");
+      const payerDefault =
+        defaultPaidById && users.some((u) => u._id === defaultPaidById)
+          ? defaultPaidById
+          : users[0]._id;
+      if (preBillSeed) {
+        setTitle(preBillSeed.title);
+        setAmount(
+          preBillSeed.suggestedAmount != null && preBillSeed.suggestedAmount > 0
+            ? String(preBillSeed.suggestedAmount)
+            : "",
+        );
+        setCategory(preBillSeed.category);
+        setPaidBy(payerDefault);
+        setSplitEnabled(true);
+        setSplitIds(new Set(users.map((u) => u._id)));
+        setDateStr(new Date().toISOString().slice(0, 10));
+        setNotes(preBillSeed.notes);
+        setDescription(
+          preBillSeed.category === "Others"
+            ? preBillSeed.notes.split("\n").find((l) => /[A-Za-z]/.test(l))?.slice(0, 500) ??
+                preBillSeed.title
+            : "",
+        );
+        setBillImage("");
+      } else {
+        setTitle("");
+        setAmount("");
+        setCategory("Groceries");
+        setPaidBy(payerDefault);
+        setSplitEnabled(true);
+        setSplitIds(new Set(users.map((u) => u._id)));
+        setDateStr(new Date().toISOString().slice(0, 10));
+        setNotes("");
+        setDescription("");
+        setBillImage("");
+      }
     }
-  }, [expense, open, users]);
+  }, [expense, open, users, preBillSeed, defaultPaidById]);
 
   useEffect(() => {
     if (!open) return;
@@ -331,10 +377,13 @@ export function ExpenseFormDialog({ users, monthKey, expense, open, onOpenChange
       if (!r.ok) throw new Error(r.error);
       return r.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success(expense ? "Expense updated" : "Expense added");
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
+      if (!expense && data && onCreated) {
+        onCreated(data);
+      }
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(e.message),

@@ -33,8 +33,4 @@ yarn-error.log*
 # vitest
 vitest.config.ts.timestamp-*
 
-# WhatsApp bot session (also whatsapp-bot/.gitignore)
-whatsapp-bot/.wwebjs_auth/
-whatsapp-bot/.env
-
 .notes/

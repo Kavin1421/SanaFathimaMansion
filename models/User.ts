@@ -14,7 +14,7 @@ export type UserDocument = {
     frequency: "daily" | "weekly";
     channels: {
       email: boolean;
-      whatsapp: boolean;
+      telegram: boolean;
     };
     quietHours: {
       startHour: number;
@@ -38,7 +38,7 @@ const userSchema = new Schema<UserDocument>(
       frequency: { type: String, enum: ["daily", "weekly"], default: "daily" },
       channels: {
         email: { type: Boolean, default: true },
-        whatsapp: { type: Boolean, default: true },
+        telegram: { type: Boolean, default: true },
       },
       quietHours: {
         startHour: { type: Number, min: 0, max: 23, default: 22 },

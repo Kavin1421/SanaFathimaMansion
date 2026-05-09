@@ -124,7 +124,7 @@ export function AdminMonthPanel({
             disabled={busy}
             onClick={startNext}
           >
-            Reset month & notify WhatsApp
+            Reset month & notify Telegram
           </Button>
         </div>
       </div>

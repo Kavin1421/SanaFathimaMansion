@@ -37,7 +37,7 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
   const [tone, setTone] = useState<"friendly" | "firm" | "custom">("friendly");
   const [customMessage, setCustomMessage] = useState("");
   const [channelInApp, setChannelInApp] = useState(true);
-  const [channelWhatsApp, setChannelWhatsApp] = useState(true);
+  const [channelTelegram, setChannelTelegram] = useState(true);
   const [channelEmail, setChannelEmail] = useState(true);
 
   const settleMut = useMutation({
@@ -68,7 +68,7 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
         customMessage: tone === "custom" ? customMessage : undefined,
         channels: {
           inApp: channelInApp,
-          whatsapp: channelWhatsApp,
+          telegram: channelTelegram,
           email: channelEmail,
         },
       });
@@ -170,7 +170,7 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
                   setTone("friendly");
                   setCustomMessage("");
                   setChannelInApp(true);
-                  setChannelWhatsApp(true);
+                  setChannelTelegram(true);
                   setChannelEmail(true);
                   setNudgeOpen(true);
                 }}
@@ -227,8 +227,8 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
                   <Button type="button" size="sm" variant={channelInApp ? "default" : "outline"} className="rounded-xl" onClick={() => setChannelInApp((v) => !v)}>
                     In-app
                   </Button>
-                  <Button type="button" size="sm" variant={channelWhatsApp ? "default" : "outline"} className="rounded-xl" onClick={() => setChannelWhatsApp((v) => !v)}>
-                    WhatsApp
+                  <Button type="button" size="sm" variant={channelTelegram ? "default" : "outline"} className="rounded-xl" onClick={() => setChannelTelegram((v) => !v)}>
+                    Telegram
                   </Button>
                   <Button type="button" size="sm" variant={channelEmail ? "default" : "outline"} className="rounded-xl" onClick={() => setChannelEmail((v) => !v)}>
                     Email
@@ -247,7 +247,7 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
               disabled={
                 nudgeMut.isPending ||
                 !activeNudgeSuggestion ||
-                (!channelInApp && !channelWhatsApp && !channelEmail) ||
+                (!channelInApp && !channelTelegram && !channelEmail) ||
                 (tone === "custom" && customMessage.trim().length < 3)
               }
               onClick={() =>

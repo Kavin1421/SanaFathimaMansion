@@ -28,7 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
 import { cn, formatInr } from "@/lib/utils";
-import { buildWhatsAppShareUrl, shareTextNative } from "@/lib/whatsapp";
+import { buildTelegramShareUrl, shareTextNative } from "@/lib/share";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -130,7 +130,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
     ].join("\n");
     const ok = await shareTextNative(text, "Expense details");
     if (ok) return toast.success("Expense shared");
-    window.open(buildWhatsAppShareUrl(text), "_blank", "noopener,noreferrer");
+    window.open(buildTelegramShareUrl(text), "_blank", "noopener,noreferrer");
   }
 
   return (

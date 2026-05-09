@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { buildWhatsAppShareUrl, shareTextNative } from "@/lib/whatsapp";
+import { buildTelegramShareUrl, shareTextNative } from "@/lib/share";
 import { MessageCircle, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,8 +21,8 @@ export function ShareActions({ summaryText }: Props) {
           const ok = await shareTextNative(summaryText, "House expenses");
           if (ok) toast.success("Shared");
           else {
-            window.open(buildWhatsAppShareUrl(summaryText), "_blank", "noopener,noreferrer");
-            toast.message("Opening WhatsApp…");
+            window.open(buildTelegramShareUrl(summaryText), "_blank", "noopener,noreferrer");
+            toast.message("Opening Telegram…");
           }
         }}
       >
@@ -35,11 +35,11 @@ export function ShareActions({ summaryText }: Props) {
         size="sm"
         className="rounded-xl"
         onClick={() => {
-          window.open(buildWhatsAppShareUrl(summaryText), "_blank", "noopener,noreferrer");
+          window.open(buildTelegramShareUrl(summaryText), "_blank", "noopener,noreferrer");
         }}
       >
         <MessageCircle className="h-4 w-4" />
-        WhatsApp
+        Telegram
       </Button>
     </div>
   );

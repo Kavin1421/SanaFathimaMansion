@@ -61,7 +61,7 @@ export function NotificationEventsPageClient() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Notification events</h2>
-        <p className="text-sm text-muted-foreground">Delivery status for email and WhatsApp sends.</p>
+        <p className="text-sm text-muted-foreground">Delivery status for email and Telegram sends.</p>
       </div>
 
       <Card className="rounded-2xl border shadow-sm">
@@ -77,7 +77,7 @@ export function NotificationEventsPageClient() {
               <SelectContent className="rounded-xl">
                 <SelectItem value="all">All channels</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="telegram">Telegram</SelectItem>
               </SelectContent>
             </Select>
           </div>
