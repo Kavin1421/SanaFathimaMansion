@@ -1,4 +1,6 @@
 import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import puppeteer from "puppeteer";
 import qrcode from "qrcode";
 import wweb from "whatsapp-web.js";
 
@@ -44,12 +46,27 @@ export function createWhatsAppClient(): Client {
     return client;
   }
 
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH?.trim() || undefined;
+  const detectedExecutablePath = (() => {
+    if (process.env.PUPPETEER_EXECUTABLE_PATH?.trim()) {
+      return process.env.PUPPETEER_EXECUTABLE_PATH.trim();
+    }
+    try {
+      return puppeteer.executablePath();
+    } catch {
+      return undefined;
+    }
+  })();
+  if (detectedExecutablePath) {
+    console.log(`[WA_DEBUG] Chrome executable candidate: ${detectedExecutablePath}`);
+    console.log(`[WA_DEBUG] Chrome executable exists: ${existsSync(detectedExecutablePath)}`);
+  } else {
+    console.warn("[WA_DEBUG] No Chrome executable path resolved");
+  }
   client = new wweb.Client({
     authStrategy: new wweb.LocalAuth({ dataPath: getDataPath() }),
     puppeteer: {
       headless: true,
-      executablePath,
+      executablePath: detectedExecutablePath,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",

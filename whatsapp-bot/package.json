@@ -8,7 +8,7 @@
     "start": "tsx src/index.ts",
     "chrome:install": "puppeteer browsers install chrome",
     "chrome:ensure": "node scripts/ensure-chrome.mjs",
-    "build:render": "npm install && npx puppeteer browsers install chrome"
+    "build:render": "npm install && PUPPETEER_CACHE_DIR=.cache/puppeteer npx puppeteer browsers install chrome"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

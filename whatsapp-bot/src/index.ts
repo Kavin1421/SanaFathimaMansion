@@ -17,7 +17,7 @@ if (!Number.isFinite(PORT) || PORT <= 0) {
 const isRender = process.env.RENDER === "true";
 
 if (isRender && !process.env.PUPPETEER_CACHE_DIR) {
-  process.env.PUPPETEER_CACHE_DIR = "/opt/render/.cache/puppeteer";
+  process.env.PUPPETEER_CACHE_DIR = resolve(process.cwd(), ".cache/puppeteer");
 }
 
 if (!process.env.WHATSAPP_BOT_API_KEY?.trim()) {
