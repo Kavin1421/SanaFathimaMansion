@@ -63,19 +63,31 @@ export function createWhatsAppClient(): Client {
   });
 
   client.on("qr", async (qr) => {
-    console.log("[WA_DEBUG] QR RECEIVED");
-    const qrUrl = await qrcode.toDataURL(qr);
-    console.log("Scan this QR:");
-    console.log(qrUrl);
+    console.log("[WA] QR RECEIVED");
+    try {
+      const qrUrl = await qrcode.toDataURL(qr);
+      console.log("\nOpen this in browser to scan:\n");
+      console.log(qrUrl);
+    } catch (err) {
+      console.error("[WA] Failed to render QR data URL:", err);
+    }
   });
 
   client.on("authenticated", () => {
-    console.log("[WA_DEBUG] authenticated");
+    console.log("[WA] AUTHENTICATED");
   });
 
   client.on("auth_failure", (msg) => {
-    console.error("[WA_DEBUG] auth_failure:", msg);
+    console.error("[WA] AUTH FAILURE:", msg);
     rejectReady(new Error(`Auth failure: ${msg}`));
+  });
+
+  client.on("loading_screen", (percent, message) => {
+    console.log(`[WA] LOADING ${percent}% ${message}`);
+  });
+
+  client.on("change_state", (state) => {
+    console.log("[WA] STATE:", state);
   });
 
   client.on("ready", () => {
@@ -96,13 +108,13 @@ export function createWhatsAppClient(): Client {
     //   }
     // })();
 
-    console.log("[WA_DEBUG] ready");
+    console.log("[WA] READY");
     console.log("WhatsApp client ready");
     resolveReady();
   });
 
   client.on("disconnected", (reason) => {
-    console.warn("[WA_DEBUG] disconnected:", reason);
+    console.warn("[WA] DISCONNECTED:", reason);
     resetReadyGate();
   });
 
