@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "prestart": "node scripts/ensure-chrome.mjs",
     "start": "tsx src/index.ts",
     "chrome:install": "puppeteer browsers install chrome",
     "build:render": "npm install && npx puppeteer browsers install chrome"
