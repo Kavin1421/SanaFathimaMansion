@@ -1,5 +1,5 @@
-import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import puppeteer from "puppeteer";
 import qrcode from "qrcode";
 import wweb from "whatsapp-web.js";
@@ -50,6 +50,49 @@ export function createWhatsAppClient(): Client {
     if (process.env.PUPPETEER_EXECUTABLE_PATH?.trim()) {
       return process.env.PUPPETEER_EXECUTABLE_PATH.trim();
     }
+
+    const cacheDir = process.env.PUPPETEER_CACHE_DIR?.trim();
+    if (cacheDir) {
+      const chromeRoot = join(cacheDir, "chrome");
+      if (existsSync(chromeRoot)) {
+        const versionDirs = readdirSync(chromeRoot, { withFileTypes: true })
+          .filter((d) => d.isDirectory())
+          .map((d) => d.name)
+          .sort((a, b) => b.localeCompare(a));
+
+        for (const versionDir of versionDirs) {
+          const candidates = [
+            join(chromeRoot, versionDir, "chrome-linux64", "chrome"),
+            join(chromeRoot, versionDir, "chrome-linux", "chrome"),
+            join(
+              chromeRoot,
+              versionDir,
+              "chrome-mac-arm64",
+              "Google Chrome for Testing.app",
+              "Contents",
+              "MacOS",
+              "Google Chrome for Testing",
+            ),
+            join(
+              chromeRoot,
+              versionDir,
+              "chrome-mac-x64",
+              "Google Chrome for Testing.app",
+              "Contents",
+              "MacOS",
+              "Google Chrome for Testing",
+            ),
+          ];
+
+          for (const candidate of candidates) {
+            if (existsSync(candidate)) {
+              return candidate;
+            }
+          }
+        }
+      }
+    }
+
     try {
       return puppeteer.executablePath();
     } catch {
