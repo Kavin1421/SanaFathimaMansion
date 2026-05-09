@@ -4,6 +4,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sendMessageRouter } from "./routes/send-message.js";
 import { isClientReady, startWhatsAppClient, waitUntilReady } from "./whatsapp.js";
+import { ensureChromeAvailable } from "./chrome.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, "../.env") });
@@ -34,6 +35,15 @@ app.get("/health", (_req, res) => {
 
 app.use(sendMessageRouter());
 
+async function bootstrapWhatsAppInBackground() {
+  try {
+    await ensureChromeAvailable();
+    startWhatsAppClient();
+  } catch (err) {
+    console.error("WhatsApp bootstrap failed:", err);
+  }
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${rawPort}`);
   console.log("POST /send-message with header x-bot-key and JSON body");
@@ -43,7 +53,7 @@ app.listen(PORT, "0.0.0.0", () => {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     console.log(`Puppeteer executable path: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
   }
-  startWhatsAppClient();
+  void bootstrapWhatsAppInBackground();
 });
 
 waitUntilReady().catch((err) => {
