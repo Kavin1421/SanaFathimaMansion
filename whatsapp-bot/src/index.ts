@@ -9,6 +9,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, "../.env") });
 
 const PORT = Number(process.env.PORT) || 3001;
+const isRender = process.env.RENDER === "true";
+
+if (isRender && !process.env.PUPPETEER_CACHE_DIR) {
+  process.env.PUPPETEER_CACHE_DIR = "/opt/render/.cache/puppeteer";
+}
 
 if (!process.env.WHATSAPP_BOT_API_KEY?.trim()) {
   console.error("Set WHATSAPP_BOT_API_KEY in whatsapp-bot/.env");
@@ -27,6 +32,12 @@ app.use(sendMessageRouter());
 app.listen(PORT, () => {
   console.log(`WhatsApp bot API listening on http://localhost:${PORT}`);
   console.log("POST /send-message with header x-bot-key and JSON body");
+  if (process.env.PUPPETEER_CACHE_DIR) {
+    console.log(`Puppeteer cache dir: ${process.env.PUPPETEER_CACHE_DIR}`);
+  }
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    console.log(`Puppeteer executable path: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+  }
   startWhatsAppClient();
 });
 

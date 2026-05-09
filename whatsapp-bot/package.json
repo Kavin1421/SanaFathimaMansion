@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "chrome:install": "puppeteer browsers install chrome",
+    "build:render": "npm install && npx puppeteer browsers install chrome"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "puppeteer": "^24.9.0",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.26.0",
     "zod": "^3.24.1"

@@ -44,10 +44,12 @@ export function createWhatsAppClient(): Client {
     return client;
   }
 
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH?.trim() || undefined;
   client = new wweb.Client({
     authStrategy: new wweb.LocalAuth({ dataPath: getDataPath() }),
     puppeteer: {
       headless: true,
+      executablePath,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
