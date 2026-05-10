@@ -207,6 +207,14 @@ const preBillItemSchema = z.object({
   quantity: z.number().positive(),
   unit: preBillUnitEnum,
   price: z.number().min(0).optional(),
+  isPurchased: z.boolean().optional(),
+  purchasedAt: z.string().optional(),
+});
+
+export const togglePreBillItemPurchasedSchema = z.object({
+  preBillId: objectIdString,
+  itemIndex: z.number().int().min(0),
+  isPurchased: z.boolean(),
 });
 
 export const createPreBillSchema = z.object({
@@ -255,3 +263,4 @@ export type UpdatePreBillInput = z.infer<typeof updatePreBillSchema>;
 export type FinalizePreBillInput = z.infer<typeof finalizePreBillSchema>;
 export type LinkPreBillExpenseInput = z.infer<typeof linkPreBillExpenseSchema>;
 export type DeletePreBillInput = z.infer<typeof deletePreBillSchema>;
+export type TogglePreBillItemPurchasedInput = z.infer<typeof togglePreBillItemPurchasedSchema>;

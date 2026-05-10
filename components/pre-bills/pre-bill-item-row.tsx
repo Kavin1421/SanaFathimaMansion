@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -10,8 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PRE_BILL_UNITS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { PreBillItemDTO } from "@/types";
-import { Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, Trash2 } from "lucide-react";
 
 type Props = {
   item: PreBillItemDTO;
@@ -19,24 +21,86 @@ type Props = {
   onChange: (index: number, next: PreBillItemDTO) => void;
   onRemove: (index: number) => void;
   disabled?: boolean;
+  canTogglePurchase?: boolean;
+  /** Rows at or above this index are not persisted yet — cannot PATCH purchase. */
+  serverItemCount?: number;
+  onTogglePurchased?: (index: number, isPurchased: boolean) => void;
+  purchaseTogglePending?: boolean;
 };
 
-export function PreBillItemRow({ item, index, onChange, onRemove, disabled }: Props) {
+export function PreBillItemRow({
+  item,
+  index,
+  onChange,
+  onRemove,
+  disabled,
+  canTogglePurchase = false,
+  serverItemCount,
+  onTogglePurchased,
+  purchaseTogglePending = false,
+}: Props) {
+  const purchased = item.isPurchased === true;
+  const countable = item.name.trim().length > 0 && item.quantity > 0;
+  const rowMuted = purchased && countable;
+  const persistedOnServer =
+    serverItemCount === undefined ? true : index < serverItemCount;
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:items-end sm:gap-3">
+    <div
+      className={cn(
+        "flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm transition-all duration-200 sm:flex-row sm:items-end sm:gap-3",
+        purchaseTogglePending && "scale-[1.01] ring-2 ring-primary/25",
+        purchased && countable && "border-emerald-200/80 bg-emerald-50/30 dark:border-emerald-900/40 dark:bg-emerald-950/20",
+      )}
+    >
+      {canTogglePurchase && onTogglePurchased ? (
+        <div className="flex shrink-0 items-start gap-2 pt-1 sm:items-end sm:pb-1">
+          <Checkbox
+            id={`pb-purchase-${index}`}
+            checked={purchased}
+            disabled={
+              !countable || !persistedOnServer || purchaseTogglePending || disabled
+            }
+            title={
+              !persistedOnServer && countable
+                ? "Save the list first — new rows must sync before marking purchased"
+                : undefined
+            }
+            onCheckedChange={(v) => onTogglePurchased(index, v === true)}
+            className="mt-0.5 data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600"
+            aria-label={purchased ? "Mark not purchased" : "Mark purchased"}
+          />
+          {purchaseTogglePending ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : purchased && countable ? (
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+          ) : null}
+        </div>
+      ) : null}
       <div className="min-w-0 flex-1 space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Item</label>
+        <label
+          htmlFor={`pb-item-name-${index}`}
+          className={cn(
+            "text-xs font-medium text-muted-foreground",
+            rowMuted && "line-through opacity-60",
+          )}
+        >
+          Item
+        </label>
         <Input
+          id={`pb-item-name-${index}`}
           value={item.name}
           onChange={(e) => onChange(index, { ...item, name: e.target.value })}
           placeholder="Oil, sugar…"
           disabled={disabled}
-          className="rounded-xl"
+          className={cn("rounded-xl", rowMuted && "line-through opacity-60")}
         />
       </div>
       <div className="grid grid-cols-2 gap-2 sm:flex sm:max-w-[280px] sm:gap-3">
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Qty</label>
+          <label className={cn("text-xs font-medium text-muted-foreground", rowMuted && "opacity-60")}>
+            Qty
+          </label>
           <Input
             type="number"
             min={0.01}
@@ -47,11 +111,13 @@ export function PreBillItemRow({ item, index, onChange, onRemove, disabled }: Pr
               onChange(index, { ...item, quantity: Number.isFinite(v) ? v : 0 });
             }}
             disabled={disabled}
-            className="rounded-xl"
+            className={cn("rounded-xl", rowMuted && "line-through opacity-60")}
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Unit</label>
+          <label className={cn("text-xs font-medium text-muted-foreground", rowMuted && "opacity-60")}>
+            Unit
+          </label>
           <Select
             value={item.unit}
             onValueChange={(u) =>
@@ -59,7 +125,7 @@ export function PreBillItemRow({ item, index, onChange, onRemove, disabled }: Pr
             }
             disabled={disabled}
           >
-            <SelectTrigger className="rounded-xl">
+            <SelectTrigger className={cn("rounded-xl", rowMuted && "opacity-60")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
@@ -72,7 +138,9 @@ export function PreBillItemRow({ item, index, onChange, onRemove, disabled }: Pr
           </Select>
         </div>
         <div className="col-span-2 space-y-1.5 sm:col-span-1 sm:w-28">
-          <label className="text-xs font-medium text-muted-foreground">Price (₹)</label>
+          <label className={cn("text-xs font-medium text-muted-foreground", rowMuted && "opacity-60")}>
+            Price (₹)
+          </label>
           <Input
             type="number"
             min={0}
@@ -92,7 +160,7 @@ export function PreBillItemRow({ item, index, onChange, onRemove, disabled }: Pr
             }}
             placeholder="Optional"
             disabled={disabled}
-            className="rounded-xl"
+            className={cn("rounded-xl", rowMuted && "opacity-60")}
           />
         </div>
       </div>

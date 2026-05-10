@@ -94,7 +94,9 @@ export const authOptions: NextAuthOptions = {
         token.isSuperAdmin = token.email === superAdminEmail();
       }
 
-      if (token.id) {
+      // Only refresh from DB on subsequent JWT updates (no `user`); on sign-in we
+      // already have fresh fields from authorize / Google branch above.
+      if (token.id && !user) {
         await connectDb();
         const acc = await Account.findById(token.id)
           .select("onboardingCompleted role ledgerUserId email")
@@ -144,18 +146,22 @@ export const authOptions: NextAuthOptions = {
             });
           }
         }
-        const { appendAuditLog } = await import("@/services/audit-log");
-        await appendAuditLog({
-          actionType: "LOGIN",
-          performedBy: {
-            accountId: user.id ?? "",
-            email: (user as { email?: string }).email?.toLowerCase().trim() ?? "",
-            name: user.name ?? "",
-          },
-          targetEntity: { type: "session", label: "signIn" },
-        });
+        const performedBy = {
+          accountId: user.id ?? "",
+          email: (user as { email?: string }).email?.toLowerCase().trim() ?? "",
+          name: user.name ?? "",
+        };
+        void import("@/services/audit-log")
+          .then(({ appendAuditLog }) =>
+            appendAuditLog({
+              actionType: "LOGIN",
+              performedBy,
+              targetEntity: { type: "session", label: "signIn" },
+            }),
+          )
+          .catch((e) => console.error("[audit] signIn log failed", e));
       } catch (e) {
-        console.error("[audit] signIn log failed", e);
+        console.error("[signIn] user activation failed", e);
       }
     },
   },

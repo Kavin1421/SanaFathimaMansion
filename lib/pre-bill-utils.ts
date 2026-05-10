@@ -1,5 +1,25 @@
 import type { PreBillItemDTO } from "@/types";
 
+/** Lines that count toward shopping progress (named, positive qty). */
+export function preBillCountableItems(items: PreBillItemDTO[]): PreBillItemDTO[] {
+  return items.filter((i) => i.name.trim().length > 0 && i.quantity > 0);
+}
+
+export function preBillShoppingStats(items: PreBillItemDTO[]): {
+  total: number;
+  purchased: number;
+  allPurchased: boolean;
+} {
+  const countable = preBillCountableItems(items);
+  const purchased = countable.filter((i) => i.isPurchased === true).length;
+  const total = countable.length;
+  return {
+    total,
+    purchased,
+    allPurchased: total > 0 && purchased === total,
+  };
+}
+
 /** Single-line preview for lists (e.g. Oil - 1L). */
 export function formatPreBillLineCompact(item: PreBillItemDTO): string {
   const qty =

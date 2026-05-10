@@ -8,6 +8,8 @@ export type PreBillItemSubdoc = {
   quantity: number;
   unit: "kg" | "g" | "L" | "pcs";
   price?: number;
+  isPurchased?: boolean;
+  purchasedAt?: Date;
 };
 
 export type PreBillDocument = {
@@ -29,6 +31,8 @@ const preBillItemSchema = new Schema<PreBillItemSubdoc>(
     quantity: { type: Number, required: true, min: 0 },
     unit: { type: String, required: true, enum: ["kg", "g", "L", "pcs"] },
     price: { type: Number, min: 0 },
+    isPurchased: { type: Boolean, default: false },
+    purchasedAt: { type: Date },
   },
   { _id: false },
 );

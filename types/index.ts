@@ -7,6 +7,10 @@ export type PreBillItemDTO = {
   quantity: number;
   unit: PreBillUnit;
   price?: number;
+  /** Whether this line has been checked off while shopping */
+  isPurchased?: boolean;
+  /** ISO timestamp when marked purchased */
+  purchasedAt?: string;
 };
 
 export type PreBillDTO = {

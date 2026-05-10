@@ -3,6 +3,7 @@
 import { duplicatePreBillAction, linkPreBillExpenseAction } from "@/app/actions/pre-bills";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
 import { PreBillEditor } from "@/components/pre-bills/pre-bill-editor";
+import { PreBillReadonlyShoppingList } from "@/components/pre-bills/pre-bill-readonly-shopping-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,15 +21,6 @@ import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-function formatLine(item: PreBillDTO["items"][number]): string {
-  const qty =
-    item.quantity % 1 === 0 ? String(item.quantity) : String(item.quantity);
-  const qtyUnit = item.unit === "pcs" ? `${qty} ${item.unit}` : `${qty}${item.unit}`;
-  const price =
-    typeof item.price === "number" ? ` · ₹${item.price.toLocaleString("en-IN")}` : "";
-  return `${item.name} - ${qtyUnit}${price}`;
-}
 
 export function PreBillDetailClient({
   id,
@@ -95,6 +87,8 @@ export function PreBillDetailClient({
       currentUserLedgerId &&
       (isSuperAdmin || preBill.createdBy === currentUserLedgerId),
   );
+
+  const canTogglePurchase = Boolean(currentUserLedgerId) || isSuperAdmin;
 
   const suggestedAmount = useMemo(() => {
     if (!preBill?.items?.length) return 0;
@@ -178,6 +172,7 @@ export function PreBillDetailClient({
             key={`${preBill._id}-${preBill.status}`}
             preBill={preBill}
             onUpdated={() => void refetch()}
+            canTogglePurchase={canTogglePurchase}
           />
         ) : (
           <>
@@ -199,23 +194,11 @@ export function PreBillDetailClient({
             <section className="space-y-4">
               <h2 className="text-lg font-semibold tracking-tight">Shopping list</h2>
               <Separator />
-              <Card className="rounded-2xl border shadow-md transition-shadow duration-300 hover:shadow-lg">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-lg">Items ({preBill.items.length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="divide-y divide-border/60">
-                    {preBill.items.map((item, i) => (
-                      <li
-                        key={i}
-                        className="flex justify-between gap-3 py-3 text-sm first:pt-0 last:pb-0"
-                      >
-                        <span className="font-medium text-foreground">{formatLine(item)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+              <PreBillReadonlyShoppingList
+                preBill={preBill}
+                canToggle={canTogglePurchase}
+                onUpdated={() => void refetch()}
+              />
             </section>
           </>
         )}

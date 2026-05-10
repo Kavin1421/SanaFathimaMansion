@@ -364,6 +364,29 @@ export function notifyTelegramPreBillEdited(
   })();
 }
 
+/** When every line on a pre-bill is marked purchased. */
+export function notifyTelegramPreBillShoppingCompleted(title: string): void {
+  void (async () => {
+    try {
+      await connectDb();
+      const appName = await getHouseDisplayName();
+      const t = title.trim() || "Shopping list";
+      const html = [
+        `🏠 <b>${escapeHtml(appName)}</b>`,
+        "",
+        `🛒 <b>Shopping completed for ${escapeHtml(t)}</b>`,
+      ].join("\n");
+      await sendPipeline({
+        html,
+        eventType: "telegram_pre_bill_shopping_complete",
+        metadata: { title: t },
+      });
+    } catch (e) {
+      console.error("[telegram-notify] pre-bill shopping completed", e);
+    }
+  })();
+}
+
 /** Fire-and-forget plain text (balance reminders, summaries). */
 export function notifyTelegramText(text: string): void {
   if (!text.trim()) return;

@@ -28,29 +28,43 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { patchPreBillItemPurchased } from "@/lib/pre-bill-purchase-api";
+import { queryKeys } from "@/lib/query-keys";
 import type { PreBillDTO, PreBillItemDTO } from "@/types";
+import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, Plus, Send } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PreBillItemRow } from "./pre-bill-item-row";
+import { PreBillShoppingProgress } from "./pre-bill-shopping-progress";
 
 function formatPreviewLine(item: PreBillItemDTO): string {
   const qty =
     item.quantity % 1 === 0 ? String(item.quantity) : String(item.quantity);
   const qtyUnit = item.unit === "pcs" ? `${qty} ${item.unit}` : `${qty}${item.unit}`;
-  return `${item.name.trim() || "…"} - ${qtyUnit}`;
+  const line = `${item.name.trim() || "…"} - ${qtyUnit}`;
+  return item.isPurchased === true && item.name.trim() ? `✓ ${line}` : line;
 }
 
 /** Same shape as persisted payload — empty-name rows are omitted (draft-only UI rows). */
 function sanitizeItemsForSave(items: PreBillItemDTO[]): PreBillItemDTO[] {
   return items
-    .map((i) => ({
-      name: i.name.trim(),
-      quantity: i.quantity,
-      unit: i.unit,
-      ...(typeof i.price === "number" && i.price >= 0 ? { price: i.price } : {}),
-    }))
+    .map((i) => {
+      const o: PreBillItemDTO = {
+        name: i.name.trim(),
+        quantity: i.quantity,
+        unit: i.unit,
+        ...(typeof i.price === "number" && i.price >= 0 ? { price: i.price } : {}),
+      };
+      if (i.isPurchased === true) {
+        o.isPurchased = true;
+        if (i.purchasedAt) o.purchasedAt = i.purchasedAt;
+      } else {
+        o.isPurchased = false;
+      }
+      return o;
+    })
     .filter((i) => i.name.length > 0 && i.quantity > 0);
 }
 
@@ -71,19 +85,25 @@ function buildPayloadSnapshot(
 export function PreBillEditor({
   preBill,
   onUpdated,
+  canTogglePurchase = true,
 }: {
   preBill: PreBillDTO;
   onUpdated: () => void;
+  /** Creator or household member (linked ledger user / super admin). */
+  canTogglePurchase?: boolean;
 }) {
+  const qc = useQueryClient();
   const [title, setTitle] = useState(preBill.title);
   const [category, setCategory] = useState(preBill.category);
   const [notes, setNotes] = useState(preBill.notes ?? "");
   const [items, setItems] = useState<PreBillItemDTO[]>(
     preBill.items.length > 0
       ? preBill.items
-      : [{ name: "", quantity: 1, unit: "pcs" }],
+      : [{ name: "", quantity: 1, unit: "pcs", isPurchased: false }],
   );
   const [itemSearch, setItemSearch] = useState("");
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [togglingIndex, setTogglingIndex] = useState<number | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
@@ -100,8 +120,8 @@ export function PreBillEditor({
   useEffect(() => {
     const rowItems: PreBillItemDTO[] =
       preBill.items.length > 0
-        ? preBill.items
-        : [{ name: "", quantity: 1, unit: "pcs" }];
+        ? preBill.items.map((i) => ({ ...i }))
+        : [{ name: "", quantity: 1, unit: "pcs", isPurchased: false }];
     setTitle(preBill.title);
     setCategory(preBill.category);
     setNotes(preBill.notes ?? "");
@@ -180,11 +200,61 @@ export function PreBillEditor({
     toast.success("Latest list sent to Telegram");
   }
 
-  const filteredIndexes = useMemo(() => {
+  const displayIndices = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
-    if (!q) return items.map((_, i) => i);
-    return items.map((it, i) => (it.name.toLowerCase().includes(q) ? i : -1)).filter((i) => i >= 0);
-  }, [items, itemSearch]);
+    let idxs = q
+      ? items.map((it, i) => (it.name.toLowerCase().includes(q) ? i : -1)).filter((i) => i >= 0)
+      : items.map((_, i) => i);
+    idxs = [...idxs].sort((a, b) => {
+      const ita = items[a];
+      const itb = items[b];
+      if (!ita || !itb) return 0;
+      const ca = ita.name.trim().length > 0 && ita.quantity > 0;
+      const cb = itb.name.trim().length > 0 && itb.quantity > 0;
+      const pa = ca && ita.isPurchased ? 1 : 0;
+      const pb = cb && itb.isPurchased ? 1 : 0;
+      if (pa !== pb) return pa - pb;
+      return a - b;
+    });
+    if (showPendingOnly) {
+      idxs = idxs.filter((i) => {
+        const it = items[i];
+        if (!it) return false;
+        if (!(it.name.trim() && it.quantity > 0)) return true;
+        return !it.isPurchased;
+      });
+    }
+    return idxs;
+  }, [items, itemSearch, showPendingOnly]);
+
+  async function togglePurchase(index: number, isPurchased: boolean) {
+    if (!canTogglePurchase) return;
+    const row = items[index];
+    if (!row?.name.trim() || row.quantity <= 0) return;
+    const prevItems = items;
+    setTogglingIndex(index);
+    setItems((curr) =>
+      curr.map((it, i) =>
+        i === index
+          ? {
+              ...it,
+              isPurchased,
+              purchasedAt: isPurchased ? new Date().toISOString() : undefined,
+            }
+          : it,
+      ),
+    );
+    try {
+      await patchPreBillItemPurchased(preBill._id, index, isPurchased);
+      qc.invalidateQueries({ queryKey: queryKeys.preBills() });
+      onUpdated();
+    } catch (e) {
+      setItems(prevItems);
+      toast.error(e instanceof Error ? e.message : "Could not update purchase state");
+    } finally {
+      setTogglingIndex(null);
+    }
+  }
 
   function updateItem(index: number, next: PreBillItemDTO) {
     setItems((prev) => prev.map((it, i) => (i === index ? next : it)));
@@ -195,7 +265,7 @@ export function PreBillEditor({
   }
 
   function addItem() {
-    setItems((prev) => [...prev, { name: "", quantity: 1, unit: "pcs" }]);
+    setItems((prev) => [...prev, { name: "", quantity: 1, unit: "pcs", isPurchased: false }]);
   }
 
   async function runFinalize() {
@@ -288,6 +358,18 @@ export function PreBillEditor({
         </CardContent>
       </Card>
 
+      <Card className="rounded-2xl border shadow-md">
+        <CardHeader className="space-y-4">
+          <CardTitle className="text-lg">Shopping progress</CardTitle>
+          <PreBillShoppingProgress
+            items={items}
+            showPendingOnly={showPendingOnly}
+            onShowPendingOnlyChange={setShowPendingOnly}
+            filterId="pb-editor-pending"
+          />
+        </CardHeader>
+      </Card>
+
       <Card className="rounded-2xl border shadow-md transition-shadow duration-300 hover:shadow-lg">
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg">Items</CardTitle>
@@ -315,7 +397,7 @@ export function PreBillEditor({
           </div>
           <div className="space-y-3">
             <AnimatePresence initial={false}>
-              {(itemSearch.trim() ? filteredIndexes : items.map((_, i) => i)).map((idx) => (
+              {displayIndices.map((idx) => (
                 <motion.div
                   key={idx}
                   layout
@@ -330,6 +412,10 @@ export function PreBillEditor({
                     item={items[idx]!}
                     onChange={updateItem}
                     onRemove={removeItem}
+                    canTogglePurchase={canTogglePurchase}
+                    serverItemCount={preBill.items.length}
+                    onTogglePurchased={togglePurchase}
+                    purchaseTogglePending={togglingIndex === idx}
                   />
                 </motion.div>
               ))}

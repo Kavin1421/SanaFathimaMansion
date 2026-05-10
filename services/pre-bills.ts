@@ -2,10 +2,53 @@ import { connectDb } from "@/lib/db";
 import type { ExpenseCategory } from "@/lib/constants";
 import type { CreatePreBillInput, UpdatePreBillInput } from "@/lib/validation";
 import { Expense } from "@/models/Expense";
+import type { PreBillItemSubdoc } from "@/models/PreBill";
 import { PreBill } from "@/models/PreBill";
 import { User } from "@/models/User";
+import { notifyTelegramPreBillShoppingCompleted } from "@/lib/telegram-notify";
 import type { PreBillDTO, PreBillItemDTO } from "@/types";
 import type { FilterQuery } from "mongoose";
+
+function mapItemToDTO(i: {
+  name: string;
+  quantity: number;
+  unit: string;
+  price?: number | null;
+  isPurchased?: boolean;
+  purchasedAt?: Date | null;
+}): PreBillItemDTO {
+  const purchased = i.isPurchased === true;
+  const dto: PreBillItemDTO = {
+    name: i.name,
+    quantity: i.quantity,
+    unit: i.unit as PreBillItemDTO["unit"],
+    ...(typeof i.price === "number" && i.price !== null ? { price: i.price } : {}),
+    isPurchased: purchased,
+  };
+  if (purchased && i.purchasedAt) {
+    dto.purchasedAt = i.purchasedAt.toISOString();
+  }
+  return dto;
+}
+
+export function normalizePreBillItemsForPersistence(
+  items: UpdatePreBillInput["items"],
+): PreBillItemSubdoc[] {
+  return items.map((it) => {
+    const purchased = it.isPurchased === true;
+    const row: PreBillItemSubdoc = {
+      name: it.name,
+      quantity: it.quantity,
+      unit: it.unit as PreBillItemSubdoc["unit"],
+      ...(typeof it.price === "number" ? { price: it.price } : {}),
+      isPurchased: purchased,
+    };
+    if (purchased) {
+      row.purchasedAt = it.purchasedAt ? new Date(it.purchasedAt) : new Date();
+    }
+    return row;
+  });
+}
 
 function toDTO(doc: {
   _id: { toString(): string };
@@ -13,7 +56,14 @@ function toDTO(doc: {
   category: ExpenseCategory;
   notes?: string;
   createdBy: { toString(): string };
-  items: { name: string; quantity: number; unit: PreBillItemDTO["unit"]; price?: number }[];
+  items: {
+    name: string;
+    quantity: number;
+    unit: string;
+    price?: number;
+    isPurchased?: boolean;
+    purchasedAt?: Date;
+  }[];
   status: "draft" | "finalized";
   linkedExpenseId?: { toString(): string };
   createdAt: Date;
@@ -25,12 +75,7 @@ function toDTO(doc: {
     category: doc.category,
     notes: doc.notes,
     createdBy: doc.createdBy.toString(),
-    items: doc.items.map((i) => ({
-      name: i.name,
-      quantity: i.quantity,
-      unit: i.unit,
-      ...(i.price !== undefined && i.price !== null ? { price: i.price } : {}),
-    })),
+    items: doc.items.map((i) => mapItemToDTO(i)),
     status: doc.status,
     linkedExpenseId: doc.linkedExpenseId?.toString(),
     createdAt: doc.createdAt.toISOString(),
@@ -89,7 +134,13 @@ export async function createPreBill(
     category: input.category,
     notes: input.notes?.trim() || undefined,
     createdBy: createdByLedgerUserId,
-    items: input.items ?? [],
+    items: (input.items ?? []).map((it) => ({
+      name: it.name,
+      quantity: it.quantity,
+      unit: it.unit,
+      ...(typeof it.price === "number" ? { price: it.price } : {}),
+      isPurchased: false,
+    })),
     status: "draft",
   });
   return toDTO(doc);
@@ -111,6 +162,7 @@ export async function updatePreBill(
     throw new Error("You can only edit your own draft");
   }
 
+  const persistedItems = normalizePreBillItemsForPersistence(input.items);
   const doc = await PreBill.findByIdAndUpdate(
     input.id,
     {
@@ -118,7 +170,7 @@ export async function updatePreBill(
         title: input.title,
         category: input.category,
         notes: input.notes?.trim() || undefined,
-        items: input.items,
+        items: persistedItems,
       },
     },
     { new: true },
@@ -155,6 +207,7 @@ export async function updateFinalizedPreBill(
     throw new Error("You can only edit your own pre-bill");
   }
 
+  const persistedItems = normalizePreBillItemsForPersistence(input.items);
   const doc = await PreBill.findByIdAndUpdate(
     input.id,
     {
@@ -162,7 +215,7 @@ export async function updateFinalizedPreBill(
         title: input.title,
         category: input.category,
         notes: input.notes?.trim() || undefined,
-        items: input.items,
+        items: persistedItems,
       },
     },
     { new: true },
@@ -180,6 +233,68 @@ export async function updateFinalizedPreBill(
     createdAt: (doc as { createdAt: Date }).createdAt,
     updatedAt: (doc as { updatedAt: Date }).updatedAt,
   });
+}
+
+/**
+ * Toggle purchased flag for one line. Allowed for super admin or any user with a linked ledger user
+ * (household member). Sends Telegram when the list transitions to all purchased.
+ */
+export async function setPreBillItemPurchased(
+  preBillId: string,
+  itemIndex: number,
+  isPurchased: boolean,
+  actorLedgerUserId: string | null,
+  isSuperAdmin: boolean,
+): Promise<PreBillDTO | null> {
+  await connectDb();
+  if (!isSuperAdmin && !actorLedgerUserId) {
+    throw new Error("Link your account to a household member to update items");
+  }
+
+  const existing = await PreBill.findById(preBillId).lean();
+  if (!existing) return null;
+
+  const rawItems = existing.items ?? [];
+  if (itemIndex < 0 || itemIndex >= rawItems.length) {
+    throw new Error("Invalid item");
+  }
+
+  const wasAllPurchased =
+    rawItems.length > 0 &&
+    rawItems.every((it: { isPurchased?: boolean }) => it.isPurchased === true);
+
+  const setPayload: Record<string, unknown> = {
+    [`items.${itemIndex}.isPurchased`]: isPurchased,
+  };
+  if (isPurchased) {
+    setPayload[`items.${itemIndex}.purchasedAt`] = new Date();
+  } else {
+    setPayload[`items.${itemIndex}.purchasedAt`] = null;
+  }
+
+  const doc = await PreBill.findByIdAndUpdate(preBillId, { $set: setPayload }, { new: true }).lean();
+  if (!doc) return null;
+
+  const dto = toDTO({
+    _id: doc._id,
+    title: doc.title,
+    category: doc.category as ExpenseCategory,
+    notes: doc.notes,
+    createdBy: doc.createdBy as unknown as { toString(): string },
+    items: doc.items,
+    status: doc.status,
+    linkedExpenseId: doc.linkedExpenseId as unknown as { toString(): string } | undefined,
+    createdAt: (doc as { createdAt: Date }).createdAt,
+    updatedAt: (doc as { updatedAt: Date }).updatedAt,
+  });
+
+  const nowAllPurchased =
+    dto.items.length > 0 && dto.items.every((it) => it.isPurchased === true);
+  if (nowAllPurchased && !wasAllPurchased) {
+    notifyTelegramPreBillShoppingCompleted(dto.title);
+  }
+
+  return dto;
 }
 
 export async function finalizePreBill(
@@ -276,6 +391,7 @@ export async function duplicatePreBill(
       quantity: i.quantity,
       unit: i.unit,
       ...(typeof i.price === "number" ? { price: i.price } : {}),
+      isPurchased: false,
     })),
     status: "draft",
   });
