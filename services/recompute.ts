@@ -14,13 +14,26 @@ function toLedgerExpense(doc: {
   paidBy: { toString(): string };
   splitBetween: { toString(): string }[];
   splitEnabled?: boolean;
+  splitMode?: "equal" | "custom";
+  splitAmounts?: { userId: { toString(): string }; amount: number }[];
 }): LedgerExpense {
   return {
     amount: doc.amount,
     paidBy: doc.paidBy.toString(),
     splitBetween: doc.splitBetween.map((id) => id.toString()),
     splitEnabled: doc.splitEnabled !== false,
+    splitMode: doc.splitMode === "custom" ? "custom" : "equal",
+    splitAmounts: splitAmountsToRecord(doc.splitAmounts),
   };
+}
+
+function splitAmountsToRecord(
+  rows?: { userId: { toString(): string }; amount: number }[],
+): Record<string, number> | undefined {
+  if (!rows?.length) return undefined;
+  const out: Record<string, number> = {};
+  for (const row of rows) out[row.userId.toString()] = row.amount;
+  return out;
 }
 
 export async function recomputeAllUserBalances(): Promise<void> {
@@ -37,6 +50,8 @@ export async function recomputeAllUserBalances(): Promise<void> {
       paidBy: e.paidBy,
       splitBetween: e.splitBetween,
       splitEnabled: e.splitEnabled,
+      splitMode: e.splitMode,
+      splitAmounts: e.splitAmounts as { userId: { toString(): string }; amount: number }[] | undefined,
     }),
   );
 

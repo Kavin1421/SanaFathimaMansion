@@ -12,6 +12,7 @@ const pagePrefixes = [
   "/onboarding",
   "/audit-logs",
   "/notification-events",
+  "/profile",
   "/api-docs",
 ];
 
@@ -29,6 +30,7 @@ function isProtectedApi(path: string) {
     path.startsWith("/api/users") ||
     path.startsWith("/api/upload") ||
     path.startsWith("/api/report") ||
+    path.startsWith("/api/activity") ||
     path.startsWith("/api/house") ||
     path.startsWith("/api/onboarding") ||
     path.startsWith("/api/audit-logs") ||
@@ -100,6 +102,8 @@ export const config = {
     "/audit-logs/:path*",
     "/notification-events",
     "/notification-events/:path*",
+    "/profile",
+    "/profile/:path*",
     "/api-docs",
     "/api-docs/:path*",
     "/api/dashboard",
@@ -116,6 +120,8 @@ export const config = {
     "/api/upload/:path*",
     "/api/report",
     "/api/report/:path*",
+    "/api/activity",
+    "/api/activity/:path*",
     "/api/house",
     "/api/house/:path*",
     "/api/onboarding",

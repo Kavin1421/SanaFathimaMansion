@@ -1,5 +1,6 @@
 "use client";
 
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AdminMonthPanel } from "@/components/dashboard/admin-month-panel";
 import { BalanceHero } from "@/components/dashboard/balance-hero";
 import { CategoryDonut } from "@/components/dashboard/category-donut";
@@ -18,6 +19,7 @@ import { Card } from "@/components/ui/card";
 import { queryKeys } from "@/lib/query-keys";
 import { formatInr } from "@/lib/utils";
 import type { MonthlySummary } from "@/types";
+import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import { useQuery } from "@tanstack/react-query";
 
 function buildSummaryText(s: MonthlySummary): string {
@@ -33,6 +35,7 @@ function buildSummaryText(s: MonthlySummary): string {
 }
 
 export function DashboardView({ monthKey }: { monthKey: string }) {
+  const refetchInterval = useRefetchIntervalMs(20_000);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.dashboard(monthKey),
     queryFn: async (): Promise<MonthlySummary> => {
@@ -40,6 +43,7 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
       if (!res.ok) throw new Error("Failed to load");
       return res.json();
     },
+    refetchInterval,
   });
 
   if (isLoading) return <DashboardSkeleton />;
@@ -74,6 +78,8 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
       <BalanceHero summary={s} />
 
       <NotificationsStack summary={s} />
+
+      <ActivityFeed />
 
       <section className="dashboard-surface col-span-12 p-5 md:p-8">
         <div className="mb-6">

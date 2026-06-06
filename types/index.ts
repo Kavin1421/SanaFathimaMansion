@@ -56,7 +56,9 @@ export type ExpenseDTO = {
   category: ExpenseCategory;
   paidBy: string;
   splitEnabled: boolean;
+  splitMode?: "equal" | "custom";
   splitBetween: string[];
+  splitAmounts?: { userId: string; amount: number }[];
   date: string;
   notes?: string;
   description?: string;

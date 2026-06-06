@@ -23,7 +23,9 @@ export type ExpenseDocument = {
   category: (typeof EXPENSE_CATEGORIES)[number];
   paidBy: Types.ObjectId;
   splitEnabled: boolean;
+  splitMode?: "equal" | "custom";
   splitBetween: Types.ObjectId[];
+  splitAmounts?: { userId: Types.ObjectId; amount: number }[];
   date: Date;
   notes?: string;
   description?: string;
@@ -59,7 +61,14 @@ const expenseSchema = new Schema<ExpenseDocument>(
     category: { type: String, required: true, enum: [...EXPENSE_CATEGORIES] },
     paidBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     splitEnabled: { type: Boolean, default: true },
+    splitMode: { type: String, enum: ["equal", "custom"], default: "equal" },
     splitBetween: [{ type: Schema.Types.ObjectId, ref: "User", required: true }],
+    splitAmounts: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        amount: { type: Number, required: true, min: 0 },
+      },
+    ],
     date: { type: Date, required: true },
     notes: { type: String },
     description: { type: String },

@@ -35,6 +35,36 @@ export const updateUserSchema = createUserSchema.partial().extend({
   id: objectIdString,
 });
 
+export const updateAccountProfileSchema = z.object({
+  name: z.string().min(1).max(80),
+  image: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
+});
+
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email().max(120),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(128),
+});
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(128),
+    newPassword: z.string().min(8).max(128),
+    confirmPassword: z.string().min(1).max(128),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+const splitAmountEntrySchema = z.object({
+  userId: objectIdString,
+  amount: z.number().positive(),
+});
+
 export const updateReminderPreferencesSchema = z.object({
   userId: objectIdString,
   frequency: z.enum(["daily", "weekly"]),
@@ -113,7 +143,9 @@ const expenseFields = {
   category: z.enum(EXPENSE_CATEGORIES),
   paidBy: objectIdString,
   splitEnabled: z.boolean().default(true),
+  splitMode: z.enum(["equal", "custom"]).default("equal"),
   splitBetween: z.array(objectIdString).default([]),
+  splitAmounts: z.array(splitAmountEntrySchema).optional(),
   date: z.coerce.date(),
   notes: z.string().max(2000).optional(),
   description: z.string().max(2000).optional(),
@@ -145,10 +177,41 @@ export const expenseBaseSchema = z
         path: ["splitBetween"],
       });
     }
+    if (data.splitEnabled && data.splitMode === "custom") {
+      const amounts = data.splitAmounts ?? [];
+      const between = new Set(data.splitBetween);
+      if (amounts.length !== between.size) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Enter an amount for each person in the split",
+          path: ["splitAmounts"],
+        });
+      }
+      for (const entry of amounts) {
+        if (!between.has(entry.userId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Custom split includes someone not in the split list",
+            path: ["splitAmounts"],
+          });
+        }
+      }
+      const sum = amounts.reduce((s, a) => s + a.amount, 0);
+      if (amounts.length > 0 && Math.abs(sum - data.amount) > 0.01) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Custom split amounts must add up to the expense total",
+          path: ["splitAmounts"],
+        });
+      }
+    }
   })
   .transform((data) => ({
     ...data,
     splitBetween: data.splitEnabled ? data.splitBetween : [data.paidBy],
+    splitMode: data.splitEnabled ? data.splitMode : "equal",
+    splitAmounts:
+      data.splitEnabled && data.splitMode === "custom" ? data.splitAmounts : undefined,
   }));
 
 export const createExpenseSchema = expenseBaseSchema;
@@ -188,6 +251,25 @@ export const updateExpenseSchema = z
         message: "Pick at least one person for the split",
         path: ["splitBetween"],
       });
+    }
+    if (splitOn === true && data.splitMode === "custom" && data.amount != null) {
+      const amounts = data.splitAmounts ?? [];
+      const between = new Set(splits ?? []);
+      const sum = amounts.reduce((s, a) => s + a.amount, 0);
+      if (amounts.length > 0 && Math.abs(sum - data.amount) > 0.01) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Custom split amounts must add up to the expense total",
+          path: ["splitAmounts"],
+        });
+      }
+      if (amounts.some((a) => splits && !between.has(a.userId))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Custom split includes someone not in the split list",
+          path: ["splitAmounts"],
+        });
+      }
     }
   });
 
@@ -254,6 +336,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupFormInput = z.infer<typeof signupFormSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type UpdateAccountProfileInput = z.infer<typeof updateAccountProfileSchema>;
 export type UpdateReminderPreferencesInput = z.infer<typeof updateReminderPreferencesSchema>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;

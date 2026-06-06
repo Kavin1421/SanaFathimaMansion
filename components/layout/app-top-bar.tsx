@@ -24,9 +24,9 @@ import { queryKeys } from "@/lib/query-keys";
 import { useMonthParam } from "@/hooks/use-month";
 import type { UserDTO } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut, Menu, UserCircle } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const pathTitles: { prefix: string; title: string }[] = [
@@ -38,6 +38,7 @@ const pathTitles: { prefix: string; title: string }[] = [
   { prefix: "/reports", title: "Reports" },
   { prefix: "/audit-logs", title: "Audit logs" },
   { prefix: "/notification-events", title: "Notification events" },
+  { prefix: "/profile", title: "Profile" },
   { prefix: "/onboarding", title: "Welcome" },
 ];
 
@@ -64,6 +65,7 @@ export function AppTopBar({
   showAuditNav?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { monthKey, setMonthKey } = useMonthParam();
   const title = titleForPath(pathname);
   const { data: session } = useSession();
@@ -139,6 +141,13 @@ export function AppTopBar({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer gap-2"
+              onSelect={() => router.push("/profile")}
+            >
+              <UserCircle className="h-4 w-4" />
+              Edit profile
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer gap-2"
               onSelect={() => signOut({ callbackUrl: "/" })}

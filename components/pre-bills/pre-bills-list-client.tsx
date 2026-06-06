@@ -27,6 +27,7 @@ import { formatPreBillLineCompact } from "@/lib/pre-bill-utils";
 import { cn } from "@/lib/utils";
 import { queryKeys } from "@/lib/query-keys";
 import type { PreBillDTO, UserDTO } from "@/types";
+import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
@@ -92,6 +93,8 @@ export function PreBillsListClient({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [finalizeId, setFinalizeId] = useState<string | null>(null);
 
+  const refetchInterval = useRefetchIntervalMs(20_000);
+
   const { data: rows = [], isLoading } = useQuery({
     queryKey: queryKeys.preBills(),
     queryFn: async (): Promise<PreBillDTO[]> => {
@@ -99,6 +102,7 @@ export function PreBillsListClient({
       if (!r.ok) throw new Error("pre-bills");
       return r.json();
     },
+    refetchInterval,
   });
 
   const { data: users = [] } = useQuery({
@@ -108,6 +112,7 @@ export function PreBillsListClient({
       if (!r.ok) throw new Error("users");
       return r.json();
     },
+    staleTime: 60_000,
   });
 
   const creatorOf = (b: PreBillDTO) =>
@@ -149,6 +154,7 @@ export function PreBillsListClient({
     onSuccess: () => {
       toast.success("Pre-bill finalized — Telegram notified");
       qc.invalidateQueries({ queryKey: queryKeys.preBills() });
+      qc.invalidateQueries({ queryKey: ["activity"] });
       setFinalizeId(null);
     },
     onError: (e: Error) => toast.error(e.message),

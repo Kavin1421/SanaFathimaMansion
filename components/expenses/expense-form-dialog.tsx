@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
+import { roundMoney } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import type { ExpenseCategory, ExpenseDTO, UserDTO } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -61,6 +62,11 @@ function FormFields({
   setSplitEnabled,
   splitIds,
   setSplitIds,
+  splitMode,
+  setSplitMode,
+  customAmounts,
+  setCustomAmount,
+  onSplitEqually,
   dateStr,
   setDateStr,
   notes,
@@ -87,6 +93,11 @@ function FormFields({
   setSplitEnabled: (v: boolean) => void;
   splitIds: Set<string>;
   setSplitIds: (s: Set<string>) => void;
+  splitMode: "equal" | "custom";
+  setSplitMode: (v: "equal" | "custom") => void;
+  customAmounts: Record<string, string>;
+  setCustomAmount: (userId: string, value: string) => void;
+  onSplitEqually: () => void;
   dateStr: string;
   setDateStr: (v: string) => void;
   notes: string;
@@ -174,24 +185,67 @@ function FormFields({
         />
       </div>
       {splitEnabled ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={splitMode === "equal" ? "default" : "outline"}
+              className="rounded-xl"
+              onClick={() => setSplitMode("equal")}
+            >
+              Equal split
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={splitMode === "custom" ? "default" : "outline"}
+              className="rounded-xl"
+              onClick={() => setSplitMode("custom")}
+            >
+              Custom amounts
+            </Button>
+          </div>
           <Label>Split between</Label>
           <div className="grid gap-2 rounded-xl border bg-muted/20 p-3">
             {users.map((u) => (
-              <label key={u._id} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={splitIds.has(u._id)}
-                  onCheckedChange={(c) => {
-                    const next = new Set(splitIds);
-                    if (c) next.add(u._id);
-                    else next.delete(u._id);
-                    setSplitIds(next);
-                  }}
-                />
-                {u.name}
-              </label>
+              <div key={u._id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={splitIds.has(u._id)}
+                    onCheckedChange={(c) => {
+                      const next = new Set(splitIds);
+                      if (c) next.add(u._id);
+                      else next.delete(u._id);
+                      setSplitIds(next);
+                    }}
+                  />
+                  {u.name}
+                </label>
+                {splitMode === "custom" && splitIds.has(u._id) ? (
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="h-9 w-full rounded-lg sm:w-28"
+                    placeholder="₹"
+                    value={customAmounts[u._id] ?? ""}
+                    onChange={(e) => setCustomAmount(u._id, e.target.value)}
+                  />
+                ) : null}
+              </div>
             ))}
           </div>
+          {splitMode === "custom" ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Custom shares must add up to the expense total ({amount ? `₹${amount}` : "enter amount above"}).
+              </p>
+              <Button type="button" size="sm" variant="outline" className="rounded-xl" onClick={onSplitEqually}>
+                Split equally
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className="space-y-2">
@@ -270,12 +324,36 @@ export function ExpenseFormDialog({
   const [category, setCategory] = useState<string>("Groceries");
   const [paidBy, setPaidBy] = useState<string>("");
   const [splitEnabled, setSplitEnabled] = useState(true);
+  const [splitMode, setSplitMode] = useState<"equal" | "custom">("equal");
   const [splitIds, setSplitIds] = useState<Set<string>>(new Set());
+  const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
   const [dateStr, setDateStr] = useState("");
   const [notes, setNotes] = useState("");
   const [description, setDescription] = useState("");
   const [billImage, setBillImage] = useState("");
   const [uploading, setUploading] = useState(false);
+
+  function setCustomAmount(userId: string, value: string) {
+    setCustomAmounts((prev) => ({ ...prev, [userId]: value }));
+  }
+
+  function splitEqually() {
+    const amt = Number(amount);
+    if (!(amt > 0) || splitIds.size === 0) {
+      toast.error("Enter amount and pick at least one person");
+      return;
+    }
+    const ids = Array.from(splitIds);
+    const share = roundMoney(amt / ids.length);
+    let assigned = 0;
+    const next: Record<string, string> = {};
+    ids.forEach((id, index) => {
+      const val = index === ids.length - 1 ? roundMoney(amt - assigned) : share;
+      assigned = roundMoney(assigned + val);
+      next[id] = String(val);
+    });
+    setCustomAmounts(next);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -285,7 +363,13 @@ export function ExpenseFormDialog({
       setCategory(expense.category);
       setPaidBy(expense.paidBy);
       setSplitEnabled(expense.splitEnabled !== false);
+      setSplitMode(expense.splitMode === "custom" ? "custom" : "equal");
       setSplitIds(new Set(expense.splitBetween));
+      const amounts: Record<string, string> = {};
+      for (const row of expense.splitAmounts ?? []) {
+        amounts[row.userId] = String(row.amount);
+      }
+      setCustomAmounts(amounts);
       setDateStr(expense.date.slice(0, 10));
       setNotes(expense.notes ?? "");
       setDescription(expense.description ?? (expense.category === "Others" ? expense.notes ?? "" : ""));
@@ -305,7 +389,9 @@ export function ExpenseFormDialog({
         setCategory(preBillSeed.category);
         setPaidBy(payerDefault);
         setSplitEnabled(true);
+        setSplitMode("equal");
         setSplitIds(new Set(users.map((u) => u._id)));
+        setCustomAmounts({});
         setDateStr(new Date().toISOString().slice(0, 10));
         setNotes(preBillSeed.notes);
         setDescription(
@@ -321,7 +407,9 @@ export function ExpenseFormDialog({
         setCategory("Groceries");
         setPaidBy(payerDefault);
         setSplitEnabled(true);
+        setSplitMode("equal");
         setSplitIds(new Set(users.map((u) => u._id)));
+        setCustomAmounts({});
         setDateStr(new Date().toISOString().slice(0, 10));
         setNotes("");
         setDescription("");
@@ -351,6 +439,17 @@ export function ExpenseFormDialog({
       if (splitEnabled && splitIds.size === 0) {
         throw new Error("Pick at least one person to split with");
       }
+      let splitAmounts: { userId: string; amount: number }[] | undefined;
+      if (splitEnabled && splitMode === "custom") {
+        splitAmounts = Array.from(splitIds).map((userId) => ({
+          userId,
+          amount: Number(customAmounts[userId] ?? 0),
+        }));
+        const sum = splitAmounts.reduce((s, row) => s + row.amount, 0);
+        if (Math.abs(sum - amt) > 0.01) {
+          throw new Error("Custom split amounts must add up to the expense total");
+        }
+      }
       const trimmedBill = billImage.trim();
       const base = {
         title: title.trim(),
@@ -358,7 +457,9 @@ export function ExpenseFormDialog({
         category: category as (typeof EXPENSE_CATEGORIES)[number],
         paidBy,
         splitEnabled,
+        splitMode: splitEnabled ? splitMode : "equal",
         splitBetween: splitEnabled ? Array.from(splitIds) : [],
+        splitAmounts,
         date: new Date(dateStr),
         notes: notes.trim() || undefined,
         description: description.trim() || undefined,
@@ -381,6 +482,7 @@ export function ExpenseFormDialog({
       toast.success(expense ? "Expense updated" : "Expense added");
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
+      qc.invalidateQueries({ queryKey: ["activity"] });
       if (!expense && data && onCreated) {
         onCreated(data);
       }
@@ -422,6 +524,11 @@ export function ExpenseFormDialog({
     setSplitEnabled,
     splitIds,
     setSplitIds,
+    splitMode,
+    setSplitMode,
+    customAmounts,
+    setCustomAmount,
+    onSplitEqually: splitEqually,
     dateStr,
     setDateStr,
     notes,

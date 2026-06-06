@@ -52,12 +52,19 @@ function toLedgerExpense(e: {
   paidBy: { toString(): string };
   splitBetween: { toString(): string }[];
   splitEnabled?: boolean;
+  splitMode?: "equal" | "custom";
+  splitAmounts?: { userId: { toString(): string }; amount: number }[];
 }): LedgerExpense {
+  const splitAmounts: Record<string, number> | undefined = e.splitAmounts?.length
+    ? Object.fromEntries(e.splitAmounts.map((row) => [row.userId.toString(), row.amount]))
+    : undefined;
   return {
     amount: e.amount,
     paidBy: e.paidBy.toString(),
     splitBetween: e.splitBetween.map((id) => id.toString()),
     splitEnabled: e.splitEnabled !== false,
+    splitMode: e.splitMode === "custom" ? "custom" : "equal",
+    splitAmounts,
   };
 }
 
@@ -68,6 +75,8 @@ function ledgerThroughCutoff(
     paidBy: { toString(): string };
     splitBetween: { toString(): string }[];
     splitEnabled?: boolean;
+    splitMode?: "equal" | "custom";
+    splitAmounts?: { userId: { toString(): string }; amount: number }[];
   }[],
   settlements: {
     date: Date;
@@ -175,6 +184,13 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
   const shareByUser: Record<string, number> = {};
   for (const e of monthExpenses) {
     if (e.splitEnabled === false) continue;
+    if (e.splitMode === "custom" && e.splitAmounts?.length) {
+      for (const row of e.splitAmounts) {
+        const sid = row.userId.toString();
+        shareByUser[sid] = (shareByUser[sid] ?? 0) + row.amount;
+      }
+      continue;
+    }
     const n = e.splitBetween.length;
     if (n < 1) continue;
     const share = e.amount / n;

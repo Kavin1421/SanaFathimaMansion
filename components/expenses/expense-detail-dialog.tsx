@@ -15,7 +15,7 @@ import type { ExpenseCategory } from "@/lib/constants";
 import { formatInr } from "@/lib/utils";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { roundMoney } from "@/lib/ledger";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { Check, Flame, ThumbsUp, Wallet } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
@@ -28,13 +28,21 @@ type Props = {
   onOpenChange: (open: boolean) => void;
 };
 
+function patchExpenseInCache(qc: QueryClient, updated: ExpenseDTO) {
+  qc.setQueriesData<ExpenseDTO[]>({ queryKey: ["expenses"] }, (old) =>
+    old?.map((e) => (e._id === updated._id ? updated : e)),
+  );
+}
+
 function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] }) {
   const userMap = new Map(users.map((u) => [u._id, u.name]));
   const cat = expense.category as ExpenseCategory;
   const splitNames = expense.splitBetween.map((id) => userMap.get(id) ?? id).join(", ");
   const share =
     expense.splitEnabled !== false && expense.splitBetween.length > 0
-      ? roundMoney(expense.amount / expense.splitBetween.length)
+      ? expense.splitMode === "custom" && expense.splitAmounts?.length
+        ? null
+        : roundMoney(expense.amount / expense.splitBetween.length)
       : null;
   const qc = useQueryClient();
   const { data: session } = useSession();
@@ -63,10 +71,11 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
       if (!r.ok) throw new Error(r.error);
       return r.data;
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       setComment("");
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+      patchExpenseInCache(qc, updated);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -77,9 +86,10 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
       if (!r.ok) throw new Error(r.error);
       return r.data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
+    onSuccess: (updated) => {
+      patchExpenseInCache(qc, updated);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -101,7 +111,15 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
         ) : (
           <>
             <p className="break-words">{splitNames}</p>
-            {share != null && expense.splitBetween.length > 1 ? (
+            {expense.splitMode === "custom" && expense.splitAmounts?.length ? (
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                {expense.splitAmounts.map((row) => (
+                  <li key={row.userId}>
+                    {userMap.get(row.userId) ?? row.userId}: {formatInr(row.amount)}
+                  </li>
+                ))}
+              </ul>
+            ) : share != null && expense.splitBetween.length > 1 ? (
               <p className="text-muted-foreground">
                 Each member owes {formatInr(share)} ({expense.splitBetween.length} people)
               </p>

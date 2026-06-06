@@ -8,4 +8,5 @@ export const queryKeys = {
   auditLogs: (filters: Record<string, string | number | undefined>) => ["auditLogs", filters] as const,
   notificationEvents: (filters: Record<string, string | number | undefined>) =>
     ["notificationEvents", filters] as const,
+  activity: (limit?: number) => ["activity", limit ?? 20] as const,
 };

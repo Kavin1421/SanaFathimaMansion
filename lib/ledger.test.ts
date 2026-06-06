@@ -20,6 +20,20 @@ describe("expenseToNetDeltas", () => {
     expect(d.c).toBe(-250);
   });
 
+  it("supports custom split amounts", () => {
+    const d = expenseToNetDeltas({
+      amount: 1000,
+      paidBy: "kevin",
+      splitBetween: ["kevin", "a", "b"],
+      splitEnabled: true,
+      splitMode: "custom",
+      splitAmounts: { kevin: 400, a: 350, b: 250 },
+    });
+    expect(d.kevin).toBe(600);
+    expect(d.a).toBe(-350);
+    expect(d.b).toBe(-250);
+  });
+
   it("returns no deltas when split is disabled (house expense)", () => {
     const d = expenseToNetDeltas({
       amount: 500,

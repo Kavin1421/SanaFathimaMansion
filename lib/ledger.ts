@@ -4,6 +4,9 @@ export type LedgerExpense = {
   splitBetween: string[];
   /** When false, expense counts toward wallet only — no per-user IOU deltas. */
   splitEnabled: boolean;
+  splitMode?: "equal" | "custom";
+  /** userId -> share owed (custom split only) */
+  splitAmounts?: Record<string, number>;
 };
 
 export type LedgerSettlement = {
@@ -18,13 +21,26 @@ export function expenseToNetDeltas(expense: LedgerExpense): Record<string, numbe
     return {};
   }
   const { amount, paidBy, splitBetween } = expense;
-  const n = splitBetween.length;
-  if (n < 1 || amount <= 0) {
+  if (splitBetween.length < 1 || amount <= 0) {
     throw new Error("Invalid expense: need positive amount and at least one splitter");
   }
-  const share = amount / n;
+
   const deltas: Record<string, number> = {};
   deltas[paidBy] = (deltas[paidBy] ?? 0) + amount;
+
+  if (expense.splitMode === "custom" && expense.splitAmounts) {
+    for (const uid of splitBetween) {
+      const share = expense.splitAmounts[uid];
+      if (share == null || share < 0) {
+        throw new Error("Invalid custom split: missing amount for participant");
+      }
+      deltas[uid] = (deltas[uid] ?? 0) - share;
+    }
+    return deltas;
+  }
+
+  const n = splitBetween.length;
+  const share = amount / n;
   for (const uid of splitBetween) {
     deltas[uid] = (deltas[uid] ?? 0) - share;
   }

@@ -13,7 +13,9 @@ function toDTO(e: {
   category: ExpenseCategory;
   paidBy: { toString(): string };
   splitEnabled?: boolean;
+  splitMode?: "equal" | "custom";
   splitBetween: { toString(): string }[];
+  splitAmounts?: { userId: { toString(): string }; amount: number }[];
   date: Date;
   notes?: string;
   description?: string;
@@ -28,7 +30,12 @@ function toDTO(e: {
     category: e.category,
     paidBy: e.paidBy.toString(),
     splitEnabled: e.splitEnabled !== false,
+    splitMode: e.splitMode === "custom" ? "custom" : "equal",
     splitBetween: e.splitBetween.map((id) => id.toString()),
+    splitAmounts: e.splitAmounts?.map((row) => ({
+      userId: row.userId.toString(),
+      amount: row.amount,
+    })),
     date: e.date.toISOString(),
     notes: e.notes,
     description: e.description,
@@ -130,7 +137,16 @@ export async function createExpense(input: CreateExpenseInput): Promise<ExpenseD
     category: input.category,
     paidBy: input.paidBy,
     splitEnabled: input.splitEnabled,
+    splitMode: input.splitMode ?? "equal",
     splitBetween: input.splitBetween,
+    ...(input.splitAmounts?.length
+      ? {
+          splitAmounts: input.splitAmounts.map((row) => ({
+            userId: row.userId,
+            amount: row.amount,
+          })),
+        }
+      : {}),
     date: input.date,
     notes: input.notes,
     description: input.description,
@@ -155,12 +171,21 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
     input.splitBetween !== undefined
       ? input.splitBetween
       : (existing.splitBetween as { toString(): string }[]).map((id) => id.toString());
+  let splitMode =
+    input.splitMode !== undefined
+      ? input.splitMode
+      : existing.splitMode === "custom"
+        ? "custom"
+        : "equal";
 
   if (splitEnabled === false) {
     splitBetweenIds = [paidByStr];
+    splitMode = "equal";
   } else if (splitBetweenIds.length < 1) {
     splitBetweenIds = (existing.splitBetween as { toString(): string }[]).map((id) => id.toString());
   }
+
+  if (splitMode !== "custom") splitMode = "equal";
 
   const category = input.category ?? existing.category;
   const description =
@@ -176,11 +201,28 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
   if (input.paidBy !== undefined) updates.paidBy = input.paidBy;
   updates.splitEnabled = splitEnabled;
   updates.splitBetween = splitBetweenIds;
+  updates.splitMode = splitMode;
+  if (splitMode === "custom") {
+    const amounts =
+      input.splitAmounts?.length
+        ? input.splitAmounts
+        : (
+            existing.splitAmounts as { userId: { toString(): string }; amount: number }[] | undefined
+          )?.map((row) => ({ userId: row.userId.toString(), amount: row.amount }));
+    if (amounts?.length) {
+      updates.splitAmounts = amounts.map((row) => ({
+        userId: row.userId,
+        amount: row.amount,
+      }));
+    }
+  }
+
+  const unset: Record<string, 1> = {};
+  if (splitMode !== "custom") unset.splitAmounts = 1;
   if (input.date !== undefined) updates.date = input.date;
   if (input.notes !== undefined) updates.notes = input.notes;
   if (input.description !== undefined) updates.description = input.description;
 
-  const unset: Record<string, 1> = {};
   if (input.billImage !== undefined) {
     if (input.billImage === null) {
       unset.billImage = 1;
@@ -202,7 +244,9 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
     category: doc.category,
     paidBy: doc.paidBy,
     splitEnabled: doc.splitEnabled,
+    splitMode: doc.splitMode,
     splitBetween: doc.splitBetween,
+    splitAmounts: doc.splitAmounts as { userId: { toString(): string }; amount: number }[] | undefined,
     date: doc.date,
     notes: doc.notes,
     description: doc.description,

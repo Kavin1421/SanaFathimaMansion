@@ -88,6 +88,30 @@ async function sendHtmlMail(input: {
   }
 }
 
+export async function sendPasswordResetEmail(input: { to: string; token: string }): Promise<void> {
+  if (!hasEmailConfig()) {
+    throw new Error("Email is not configured");
+  }
+  const resetUrl = `${appBaseUrl()}/reset-password?token=${encodeURIComponent(input.token)}`;
+  const subject = "Reset your SanaFathima Mansion password";
+  const html = renderAppEmail({
+    title: "Reset your password",
+    greeting: "Hi,",
+    lead: "We received a request to reset your password. This link expires in 1 hour.",
+    bullets: ["If you did not request this, you can ignore this email"],
+    ctaLabel: "Reset password",
+    ctaHref: resetUrl,
+  });
+  const text = `Reset your password: ${resetUrl}\n\nThis link expires in 1 hour.`;
+  await sendHtmlMail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    eventType: "password_reset_email",
+  });
+}
+
 export async function sendInviteEmail(input: {
   to: string;
   name: string;

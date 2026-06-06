@@ -27,9 +27,9 @@ export default function ReportsPage({ searchParams }: Props) {
 
       <Card className="card-hover col-span-12 rounded-2xl border shadow-sm glow-card">
         <CardHeader>
-          <CardTitle>Monthly PDF</CardTitle>
+          <CardTitle>Monthly exports</CardTitle>
           <CardDescription>
-            Opens in a new tab. Use your browser print dialog to save as PDF if needed.
+            PDF for printing; CSV for Excel or Google Sheets.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
@@ -37,6 +37,12 @@ export default function ReportsPage({ searchParams }: Props) {
             <a href={pdfHref} target="_blank" rel="noreferrer">
               <FileDown className="mr-2 h-4 w-4" />
               Export PDF
+            </a>
+          </Button>
+          <Button variant="outline" className="rounded-xl active:scale-[0.98]" asChild>
+            <a href={`/api/report/csv?month=${encodeURIComponent(monthKey)}`} download>
+              <FileDown className="mr-2 h-4 w-4" />
+              Export CSV
             </a>
           </Button>
         </CardContent>

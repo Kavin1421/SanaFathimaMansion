@@ -31,6 +31,7 @@ import { cn, formatInr } from "@/lib/utils";
 import { buildTelegramShareUrl, shareTextNative } from "@/lib/share";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { Eye, Pencil, Plus, Share2, Trash2 } from "lucide-react";
@@ -50,7 +51,8 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   const [editing, setEditing] = useState<ExpenseDTO | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<ExpenseDTO | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [viewingFallback, setViewingFallback] = useState<ExpenseDTO | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const { data: users = [] } = useQuery({
@@ -72,6 +74,8 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
     [monthKey, category, paidBy, debouncedSearch],
   );
 
+  const refetchInterval = useRefetchIntervalMs(20_000);
+
   const { data: expenses, isLoading } = useQuery({
     queryKey: queryKeys.expenses(filters),
     queryFn: async (): Promise<ExpenseDTO[]> => {
@@ -84,9 +88,15 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
       if (!r.ok) throw new Error("expenses");
       return r.json();
     },
+    refetchInterval,
   });
 
   const userMap = useMemo(() => new Map(users.map((u) => [u._id, u.name])), [users]);
+
+  const viewingExpense = useMemo(() => {
+    if (!viewingId) return null;
+    return expenses?.find((e) => e._id === viewingId) ?? viewingFallback;
+  }, [viewingId, expenses, viewingFallback]);
 
   const delMut = useMutation({
     mutationFn: async (id: string) => {
@@ -115,7 +125,8 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   });
 
   function openView(e: ExpenseDTO) {
-    setViewing(e);
+    setViewingId(e._id);
+    setViewingFallback(e);
     setDetailOpen(true);
   }
 
@@ -245,6 +256,8 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                           ) : null}
                           {!e.splitEnabled ? (
                             <p className="text-xs text-amber-700 dark:text-amber-400">House expense (no split)</p>
+                          ) : e.splitMode === "custom" ? (
+                            <p className="text-xs text-muted-foreground">Custom split</p>
                           ) : null}
                         </div>
                       </div>
@@ -321,12 +334,15 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
       />
 
       <ExpenseDetailDialog
-        expense={viewing}
+        expense={viewingExpense}
         users={users}
         open={detailOpen}
         onOpenChange={(o) => {
           setDetailOpen(o);
-          if (!o) setViewing(null);
+          if (!o) {
+            setViewingId(null);
+            setViewingFallback(null);
+          }
         }}
       />
 

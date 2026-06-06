@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { queryKeys } from "@/lib/query-keys";
 import { formatInr } from "@/lib/utils";
 import { useMonthParam } from "@/hooks/use-month";
+import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import type { MonthlySummary, SettlementDTO, UserDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -28,6 +29,8 @@ export function SettlementRoomPageClient() {
     null,
   );
 
+  const refetchInterval = useRefetchIntervalMs(20_000);
+
   const dashboardQ = useQuery({
     queryKey: queryKeys.dashboard(monthKey),
     queryFn: async (): Promise<MonthlySummary> => {
@@ -35,6 +38,7 @@ export function SettlementRoomPageClient() {
       if (!res.ok) throw new Error("Failed to load dashboard");
       return res.json();
     },
+    refetchInterval,
   });
   const usersQ = useQuery({
     queryKey: queryKeys.users,
@@ -43,6 +47,7 @@ export function SettlementRoomPageClient() {
       if (!res.ok) throw new Error("Failed to load users");
       return res.json();
     },
+    refetchInterval,
   });
   const settlementsQ = useQuery({
     queryKey: queryKeys.settlements,
@@ -51,6 +56,7 @@ export function SettlementRoomPageClient() {
       if (!res.ok) throw new Error("Failed to load settlements");
       return res.json();
     },
+    refetchInterval,
   });
 
   const settleMut = useMutation({
@@ -63,6 +69,7 @@ export function SettlementRoomPageClient() {
       toast.success("Marked as paid");
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
       qc.invalidateQueries({ queryKey: queryKeys.settlements });
+      qc.invalidateQueries({ queryKey: ["activity"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -76,6 +83,7 @@ export function SettlementRoomPageClient() {
     onSuccess: () => {
       toast.success("Settlement confirmed");
       qc.invalidateQueries({ queryKey: queryKeys.settlements });
+      qc.invalidateQueries({ queryKey: ["activity"] });
       qc.invalidateQueries({ queryKey: queryKeys.auditLogs({}) });
     },
     onError: (e: Error) => toast.error(e.message),

@@ -12,6 +12,7 @@ import {
   Receipt,
   ScrollText,
   ShoppingCart,
+  UserCircle,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -29,6 +30,7 @@ const navLinks: {
   { href: "/settlements", label: "Settlements", icon: Handshake },
   { href: "/users", label: "Users", icon: Users },
   { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/profile", label: "Profile", icon: UserCircle },
   { href: "/audit-logs", label: "Audit logs", icon: ScrollText, superAdminOnly: true },
   { href: "/notification-events", label: "Notification events", icon: BellRing, superAdminOnly: true },
 ];
@@ -67,7 +69,7 @@ export function AppSidebar({
           .filter((l) => !l.superAdminOnly || showAuditNav)
           .map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
-          const to = `${href}?month=${encodeURIComponent(monthKey)}`;
+          const to = href === "/profile" ? href : `${href}?month=${encodeURIComponent(monthKey)}`;
           return (
             <Link
               key={href}

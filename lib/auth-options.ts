@@ -53,9 +53,17 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger, session }) {
+      if (trigger === "update" && session) {
+        const patch = session as { name?: string; image?: string | null };
+        if (typeof patch.name === "string") token.name = patch.name;
+        if ("image" in patch) token.picture = patch.image ?? undefined;
+      }
+
       if (user && account?.provider === "credentials") {
         token.id = user.id;
+        token.name = user.name ?? token.name;
+        token.picture = user.image ?? undefined;
         token.onboardingCompleted = Boolean(
           (user as { onboardingCompleted?: boolean }).onboardingCompleted,
         );
@@ -87,6 +95,8 @@ export const authOptions: NextAuthOptions = {
           await acc.save();
         }
         token.id = acc._id.toString();
+        token.name = acc.name;
+        token.picture = acc.image ?? undefined;
         token.onboardingCompleted = acc.onboardingCompleted;
         token.role = acc.role ?? "user";
         token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
@@ -99,12 +109,14 @@ export const authOptions: NextAuthOptions = {
       if (token.id && !user) {
         await connectDb();
         const acc = await Account.findById(token.id)
-          .select("onboardingCompleted role ledgerUserId email")
+          .select("onboardingCompleted role ledgerUserId email name image")
           .lean();
         if (acc) {
           token.onboardingCompleted = Boolean(acc.onboardingCompleted);
           token.role = acc.role ?? "user";
           token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
+          token.name = acc.name;
+          token.picture = acc.image ?? undefined;
           if (acc.email) {
             token.email = acc.email.toLowerCase().trim();
             token.isSuperAdmin = token.email === superAdminEmail();
@@ -117,6 +129,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.name = (token.name as string | undefined) ?? session.user.name ?? "";
+        session.user.image = (token.picture as string | undefined) ?? null;
         session.user.onboardingCompleted = Boolean(token.onboardingCompleted);
         session.user.role = (token.role as "admin" | "user") ?? "user";
         session.user.ledgerUserId = (token.ledgerUserId as string | undefined) ?? null;
