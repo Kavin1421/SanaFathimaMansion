@@ -16,8 +16,10 @@ import {
   type ExpensePreviewResult,
   resolveInrAmount,
 } from "@/lib/expense-preview";
+import { toUserMessage } from "@/lib/user-messages";
 import { formatInr } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
+import { useMemo } from "react";
 
 export function ExpenseImpactPreview({
   open,
@@ -38,11 +40,35 @@ export function ExpenseImpactPreview({
   busy?: boolean;
   title?: string;
 }) {
-  let preview: ExpensePreviewResult | null = null;
-  if (open && input && isPreviewInputValid(input)) {
-    const inrAmount = resolveInrAmount(input);
-    preview = computeExpensePreview({ ...input, inrAmount }, currentBalances, userNames);
-  }
+  const previewState = useMemo((): {
+    preview: ExpensePreviewResult | null;
+    errorMessage: string | null;
+    incomplete: boolean;
+  } => {
+    if (!open || !input) {
+      return { preview: null, errorMessage: null, incomplete: false };
+    }
+    if (!isPreviewInputValid(input)) {
+      return {
+        preview: null,
+        errorMessage: null,
+        incomplete: true,
+      };
+    }
+    try {
+      const inrAmount = resolveInrAmount(input);
+      const preview = computeExpensePreview({ ...input, inrAmount }, currentBalances, userNames);
+      return { preview, errorMessage: null, incomplete: false };
+    } catch (error) {
+      return {
+        preview: null,
+        errorMessage: toUserMessage(error, "expense-preview"),
+        incomplete: false,
+      };
+    }
+  }, [open, input, currentBalances, userNames]);
+
+  const { preview, errorMessage, incomplete } = previewState;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,7 +77,21 @@ export function ExpenseImpactPreview({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {!preview ? (
-          <p className="text-sm text-muted-foreground">Nothing to preview.</p>
+          errorMessage ? (
+            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <div>
+                <p className="font-medium text-destructive">Couldn&apos;t preview this expense</p>
+                <p className="mt-1 text-muted-foreground">{errorMessage}</p>
+              </div>
+            </div>
+          ) : incomplete ? (
+            <p className="text-sm text-muted-foreground">
+              Complete the amount, payer, and split details, then open review again.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nothing to preview.</p>
+          )
         ) : (
           <div className="space-y-4">
             <div className="rounded-xl border bg-muted/30 divide-y">
@@ -124,7 +164,12 @@ export function ExpenseImpactPreview({
           >
             Back
           </Button>
-          <Button type="button" className="rounded-xl" disabled={busy || !preview} onClick={onConfirm}>
+          <Button
+            type="button"
+            className="rounded-xl"
+            disabled={busy || !preview || Boolean(errorMessage)}
+            onClick={onConfirm}
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Confirm & save
           </Button>

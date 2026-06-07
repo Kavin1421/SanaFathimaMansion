@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { queryKeys } from "@/lib/query-keys";
 import { formatInr } from "@/lib/utils";
+import { toUserMessage } from "@/lib/user-messages";
 import type { MonthlySummary } from "@/types";
 import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import { useQuery } from "@tanstack/react-query";
@@ -58,6 +59,7 @@ export function DashboardView({
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.dashboard(monthKey),
+    meta: { silentError: true },
     queryFn: async (): Promise<MonthlySummary> => {
       const res = await fetch(`/api/dashboard?month=${encodeURIComponent(monthKey)}`);
       if (!res.ok) throw new Error("Failed to load");
@@ -89,7 +91,7 @@ export function DashboardView({
       <Card className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 shadow-sm">
         <p className="font-medium text-destructive">Could not load dashboard</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          {(error as Error)?.message ?? "Check MongoDB connection and .env.local."}
+          {toUserMessage(error, "network")}
         </p>
       </Card>
     );

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { UserErrorBoundary } from "@/components/error-boundary";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopBar } from "@/components/layout/app-top-bar";
 
@@ -22,7 +23,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <AppTopBar houseName={houseName} showAuditNav={showAuditNav} />
         <main className="mx-auto w-full max-w-7xl flex-1 py-6 pb-[max(5rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 md:py-10 md:pb-24 md:pl-[max(2rem,env(safe-area-inset-left))] md:pr-[max(2rem,env(safe-area-inset-right))]">
-          {children}
+          <UserErrorBoundary title="This page ran into a problem">{children}</UserErrorBoundary>
         </main>
       </div>
     </div>

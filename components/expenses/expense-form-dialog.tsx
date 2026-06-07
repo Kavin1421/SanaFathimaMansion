@@ -22,6 +22,7 @@ import { SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currency";
 import { resolveInrAmount } from "@/lib/expense-preview";
 import { queryKeys } from "@/lib/query-keys";
 import { roundMoney } from "@/lib/ledger";
+import { showUserError } from "@/lib/show-user-error";
 import { cn, formatInr } from "@/lib/utils";
 import type { ExpenseCategory, ExpenseDTO, UserDTO } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -560,7 +561,7 @@ export function ExpenseFormDialog({
   async function openPreview() {
     const err = validateForm();
     if (err) {
-      toast.error(err);
+      showUserError(err, "expense");
       return;
     }
     let balances = currentBalancesProp ?? fetchedBalances;
@@ -653,7 +654,7 @@ export function ExpenseFormDialog({
                       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
                       qc.invalidateQueries({ queryKey: ["activity"] });
                     } else {
-                      toast.error(r.error);
+                      showUserError(r.error, "expense");
                     }
                   });
                 },
@@ -669,7 +670,7 @@ export function ExpenseFormDialog({
       }
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => showUserError(e, "expense"),
   });
 
   async function onUploadFile(file: File | null) {
@@ -684,7 +685,7 @@ export function ExpenseFormDialog({
       setBillImage(data.url as string);
       toast.success("Image uploaded");
     } catch (e) {
-      toast.error((e as Error).message);
+      showUserError(e, "upload");
     } finally {
       setUploading(false);
     }
