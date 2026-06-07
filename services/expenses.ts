@@ -1,12 +1,15 @@
 import { connectDb } from "@/lib/db";
 import type { ExpenseCategory } from "@/lib/constants";
+import { isApprovedExpense } from "@/lib/expense-ledger-utils";
 import type { CreateExpenseInput, UpdateExpenseInput } from "@/lib/validation";
 import { Expense } from "@/models/Expense";
 import type { ExpenseDTO } from "@/types";
 import { recomputeAllUserBalances } from "./recompute";
 import type { FilterQuery } from "mongoose";
 
-function toDTO(e: {
+const UNDO_GRACE_MS = 5 * 60 * 1000;
+
+type ExpenseDocShape = {
   _id: { toString(): string };
   title: string;
   amount: number;
@@ -20,9 +23,16 @@ function toDTO(e: {
   notes?: string;
   description?: string;
   billImage?: string;
+  status?: "pending" | "approved" | "rejected";
+  rejectionReason?: string;
+  currency?: string;
+  originalAmount?: number;
+  exchangeRate?: number;
   comments?: { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[];
   reactions?: { emoji: string; accountId: string; authorName: string; createdAt: Date }[];
-}): ExpenseDTO {
+};
+
+function toDTO(e: ExpenseDocShape): ExpenseDTO {
   return {
     _id: e._id.toString(),
     title: e.title,
@@ -40,6 +50,11 @@ function toDTO(e: {
     notes: e.notes,
     description: e.description,
     billImage: e.billImage,
+    status: e.status,
+    rejectionReason: e.rejectionReason,
+    currency: e.currency,
+    originalAmount: e.originalAmount,
+    exchangeRate: e.exchangeRate,
     comments: (e.comments ?? []).map((c) => ({
       _id: c._id.toString(),
       accountId: c.accountId,
@@ -56,11 +71,16 @@ function toDTO(e: {
   };
 }
 
+function leanToShape(e: Record<string, unknown>): ExpenseDocShape {
+  return e as unknown as ExpenseDocShape;
+}
+
 export type ExpenseListFilters = {
   monthKey?: string;
   category?: ExpenseCategory;
   paidBy?: string;
   search?: string;
+  includePending?: boolean;
 };
 
 export async function listExpenses(filters: ExpenseListFilters): Promise<ExpenseDTO[]> {
@@ -81,47 +101,31 @@ export async function listExpenses(filters: ExpenseListFilters): Promise<Expense
       { description: { $regex: t, $options: "i" } },
     ];
   }
+  if (!filters.includePending) {
+    const approvedOnly = { $or: [{ status: { $exists: false } }, { status: "approved" }] };
+    if (q.$or) {
+      q.$and = [{ $or: q.$or }, approvedOnly];
+      delete q.$or;
+    } else {
+      Object.assign(q, approvedOnly);
+    }
+  }
 
-  const cursor = Expense.find(q).sort({ date: -1 });
-  const rows = await cursor.lean();
-  return rows.map((e) =>
-    toDTO({
-      _id: e._id,
-      title: e.title,
-      amount: e.amount,
-      category: e.category,
-      paidBy: e.paidBy as unknown as { toString(): string },
-      splitEnabled: e.splitEnabled,
-      splitBetween: e.splitBetween as unknown as { toString(): string }[],
-      date: e.date,
-      notes: e.notes,
-      description: e.description,
-      billImage: e.billImage,
-      comments: e.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
-      reactions: e.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
-    }),
-  );
+  const rows = await Expense.find(q).sort({ date: -1 }).lean();
+  return rows.map((e) => toDTO(leanToShape(e)));
+}
+
+export async function listPendingExpenses(): Promise<ExpenseDTO[]> {
+  await connectDb();
+  const rows = await Expense.find({ status: "pending" }).sort({ createdAt: -1 }).lean();
+  return rows.map((e) => toDTO(leanToShape(e)));
 }
 
 export async function getExpenseById(id: string): Promise<ExpenseDTO | null> {
   await connectDb();
   const e = await Expense.findById(id).lean();
   if (!e) return null;
-  return toDTO({
-    _id: e._id,
-    title: e.title,
-    amount: e.amount,
-    category: e.category,
-    paidBy: e.paidBy,
-    splitEnabled: e.splitEnabled,
-    splitBetween: e.splitBetween,
-    date: e.date,
-    notes: e.notes,
-    description: e.description,
-    billImage: e.billImage,
-    comments: e.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
-    reactions: e.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
-  });
+  return toDTO(leanToShape(e));
 }
 
 export async function createExpense(input: CreateExpenseInput): Promise<ExpenseDTO> {
@@ -151,11 +155,57 @@ export async function createExpense(input: CreateExpenseInput): Promise<ExpenseD
     notes: input.notes,
     description: input.description,
     ...(bill ? { billImage: bill } : {}),
+    status: input.status ?? "approved",
+    ...(input.currency ? { currency: input.currency } : {}),
+    ...(input.originalAmount != null ? { originalAmount: input.originalAmount } : {}),
+    ...(input.exchangeRate != null ? { exchangeRate: input.exchangeRate } : {}),
     comments: [],
     reactions: [],
   });
-  await recomputeAllUserBalances();
+  if (isApprovedExpense(doc)) {
+    await recomputeAllUserBalances();
+  }
   return toDTO(doc);
+}
+
+export async function approveExpense(id: string): Promise<ExpenseDTO | null> {
+  await connectDb();
+  const doc = await Expense.findOneAndUpdate(
+    { _id: id, status: "pending" },
+    { $set: { status: "approved" }, $unset: { rejectionReason: 1 } },
+    { new: true },
+  ).lean();
+  if (!doc) return null;
+  await recomputeAllUserBalances();
+  return toDTO(leanToShape(doc));
+}
+
+export async function rejectExpense(id: string, reason: string): Promise<ExpenseDTO | null> {
+  await connectDb();
+  const doc = await Expense.findOneAndUpdate(
+    { _id: id, status: "pending" },
+    { $set: { status: "rejected", rejectionReason: reason.trim() } },
+    { new: true },
+  ).lean();
+  if (!doc) return null;
+  return toDTO(leanToShape(doc));
+}
+
+export async function undoExpense(id: string): Promise<ExpenseDTO | null> {
+  await connectDb();
+  const doc = await Expense.findById(id).lean();
+  if (!doc) return null;
+  const createdAt = (doc as { createdAt?: Date }).createdAt;
+  if (!createdAt || Date.now() - createdAt.getTime() > UNDO_GRACE_MS) {
+    throw new Error("Undo window expired");
+  }
+  const dto = toDTO(leanToShape(doc));
+  const wasApproved = isApprovedExpense(doc);
+  await Expense.deleteOne({ _id: id });
+  if (wasApproved) {
+    await recomputeAllUserBalances();
+  }
+  return dto;
 }
 
 export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseDTO | null> {
@@ -222,6 +272,10 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
   if (input.date !== undefined) updates.date = input.date;
   if (input.notes !== undefined) updates.notes = input.notes;
   if (input.description !== undefined) updates.description = input.description;
+  if (input.status !== undefined) updates.status = input.status;
+  if (input.currency !== undefined) updates.currency = input.currency;
+  if (input.originalAmount !== undefined) updates.originalAmount = input.originalAmount;
+  if (input.exchangeRate !== undefined) updates.exchangeRate = input.exchangeRate;
 
   if (input.billImage !== undefined) {
     if (input.billImage === null) {
@@ -236,31 +290,22 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
 
   const doc = await Expense.findByIdAndUpdate(input.id, mongoUpdate, { new: true }).lean();
   if (!doc) return null;
-  await recomputeAllUserBalances();
-  return toDTO({
-    _id: doc._id,
-    title: doc.title,
-    amount: doc.amount,
-    category: doc.category,
-    paidBy: doc.paidBy,
-    splitEnabled: doc.splitEnabled,
-    splitMode: doc.splitMode,
-    splitBetween: doc.splitBetween,
-    splitAmounts: doc.splitAmounts as { userId: { toString(): string }; amount: number }[] | undefined,
-    date: doc.date,
-    notes: doc.notes,
-    description: doc.description,
-    billImage: doc.billImage,
-    comments: doc.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
-    reactions: doc.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
-  });
+  if (isApprovedExpense(doc)) {
+    await recomputeAllUserBalances();
+  }
+  return toDTO(leanToShape(doc));
 }
 
 export async function deleteExpense(id: string): Promise<boolean> {
   await connectDb();
+  const existing = await Expense.findById(id).lean();
+  if (!existing) return false;
+  const wasApproved = isApprovedExpense(existing);
   const res = await Expense.deleteOne({ _id: id });
   if (res.deletedCount === 0) return false;
-  await recomputeAllUserBalances();
+  if (wasApproved) {
+    await recomputeAllUserBalances();
+  }
   return true;
 }
 
@@ -289,21 +334,7 @@ export async function addExpenseComment(input: {
     { new: true },
   ).lean();
   if (!doc) return null;
-  return toDTO({
-    _id: doc._id,
-    title: doc.title,
-    amount: doc.amount,
-    category: doc.category,
-    paidBy: doc.paidBy,
-    splitEnabled: doc.splitEnabled,
-    splitBetween: doc.splitBetween,
-    date: doc.date,
-    notes: doc.notes,
-    description: doc.description,
-    billImage: doc.billImage,
-    comments: doc.comments as { _id: { toString(): string }; accountId: string; authorName: string; text: string; createdAt: Date }[] | undefined,
-    reactions: doc.reactions as { emoji: string; accountId: string; authorName: string; createdAt: Date }[] | undefined,
-  });
+  return toDTO(leanToShape(doc));
 }
 
 export async function toggleExpenseReaction(input: {
@@ -339,4 +370,9 @@ export async function toggleExpenseReaction(input: {
     );
   }
   return getExpenseById(input.expenseId);
+}
+
+export async function countPendingExpenses(): Promise<number> {
+  await connectDb();
+  return Expense.countDocuments({ status: "pending" });
 }

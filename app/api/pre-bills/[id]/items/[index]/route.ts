@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthSession } from "@/lib/api-auth";
-import { isSuperAdminSession } from "@/lib/super-admin";
+import { isHouseAdminSession } from "@/lib/admin";
 import { setPreBillItemPurchased } from "@/services/pre-bills";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const ledgerId = session.user?.ledgerUserId ?? null;
-  const isSuper = isSuperAdminSession(session);
-  if (!isSuper && !ledgerId) {
+  const isHouseAdmin = isHouseAdminSession(session);
+  if (!isHouseAdmin && !ledgerId) {
     return NextResponse.json(
       { error: "Link your account to a household member first" },
       { status: 403 },
@@ -41,7 +41,7 @@ export async function PATCH(
       itemIndex,
       isPurchased,
       ledgerId,
-      isSuper,
+      isHouseAdmin,
     );
     if (!data) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });

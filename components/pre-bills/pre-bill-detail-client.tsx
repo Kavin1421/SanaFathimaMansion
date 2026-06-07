@@ -1,8 +1,8 @@
 "use client";
 
-import { duplicatePreBillAction, linkPreBillExpenseAction } from "@/app/actions/pre-bills";
-import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
+import { duplicatePreBillAction } from "@/app/actions/pre-bills";
 import { PreBillEditor } from "@/components/pre-bills/pre-bill-editor";
+import { PreBillExpenseWizard } from "@/components/pre-bills/pre-bill-expense-wizard";
 import { PreBillReadonlyShoppingList } from "@/components/pre-bills/pre-bill-readonly-shopping-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ export function PreBillDetailClient({
   const { data: session } = useSession();
   const ledgerUserId = session?.user?.ledgerUserId ?? null;
 
-  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data: preBill = initialData, refetch } = useQuery({
     queryKey: ["preBill", id],
@@ -62,6 +62,20 @@ export function PreBillDetailClient({
       return r.json();
     },
   });
+
+  const { data: dashboard } = useQuery({
+    queryKey: queryKeys.dashboard(monthKey),
+    queryFn: async () => {
+      const r = await fetch(`/api/dashboard?month=${encodeURIComponent(monthKey)}`);
+      if (!r.ok) throw new Error("dashboard");
+      return r.json();
+    },
+  });
+
+  const currentBalances = useMemo(() => {
+    if (!dashboard?.balances) return {};
+    return Object.fromEntries(dashboard.balances.map((b: { userId: string; balance: number }) => [b.userId, b.balance]));
+  }, [dashboard]);
 
   const dupMut = useMutation({
     mutationFn: async () => {
@@ -208,9 +222,9 @@ export function PreBillDetailClient({
             <p className="mb-4 text-sm text-muted-foreground">
               Turn this list into a ledger expense when you have the receipt and final amount.
             </p>
-            <Button type="button" className="rounded-xl shadow-sm transition hover:scale-[1.02]" onClick={() => setExpenseOpen(true)}>
+            <Button type="button" className="rounded-xl shadow-sm transition hover:scale-[1.02]" onClick={() => setWizardOpen(true)}>
               <Wallet className="mr-2 h-4 w-4" />
-              Add to ledger
+              Book as expense
             </Button>
           </section>
         ) : null}
@@ -224,29 +238,19 @@ export function PreBillDetailClient({
         ) : null}
       </div>
 
-      <ExpenseFormDialog
-        users={users}
-        monthKey={monthKey}
-        expense={null}
-        open={expenseOpen}
-        onOpenChange={setExpenseOpen}
-        preBillSeed={preBillSeed}
-        defaultPaidById={ledgerUserId ?? undefined}
-        onCreated={async (expense) => {
-          const link = await linkPreBillExpenseAction({
-            preBillId: preBill._id,
-            expenseId: expense._id,
-          });
-          if (!link.ok) {
-            toast.error(link.error);
-            return;
-          }
-          toast.success("Linked to pre-bill");
-          qc.invalidateQueries({ queryKey: ["preBill", id] });
-          qc.invalidateQueries({ queryKey: queryKeys.preBills() });
-          void refetch();
-        }}
-      />
+      {preBillSeed ? (
+        <PreBillExpenseWizard
+          preBill={preBill}
+          preBillSeed={preBillSeed}
+          users={users}
+          monthKey={monthKey}
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          defaultPaidById={ledgerUserId ?? undefined}
+          currentBalances={currentBalances}
+          onLinked={() => void refetch()}
+        />
+      ) : null}
     </div>
   );
 }

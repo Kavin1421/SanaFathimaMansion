@@ -1,4 +1,5 @@
 import { connectDb } from "@/lib/db";
+import { superAdminEmail } from "@/lib/super-admin";
 import type {
   CreateUserInput,
   UpdateReminderPreferencesInput,
@@ -85,9 +86,15 @@ export async function getUserById(id: string): Promise<UserDTO | null> {
 
 export async function listUsers(): Promise<UserDTO[]> {
   await connectDb();
-  const users = await User.find().sort({ name: 1 }).lean();
-  return users.map((u) =>
-    toDTO({
+  const [users, accounts] = await Promise.all([
+    User.find().sort({ name: 1 }).lean(),
+    Account.find().select("_id email role ledgerUserId").lean(),
+  ]);
+  const superEmail = superAdminEmail();
+  const accountByEmail = new Map(accounts.map((a) => [a.email.toLowerCase().trim(), a]));
+
+  return users.map((u) => {
+    const dto = toDTO({
       _id: u._id,
       name: u.name,
       email: u.email,
@@ -98,8 +105,19 @@ export async function listUsers(): Promise<UserDTO[]> {
       avatar: u.avatar,
       totalPaid: u.totalPaid,
       balance: u.balance,
-    }),
-  );
+    });
+    const acc = accountByEmail.get(u.email.toLowerCase().trim());
+    return {
+      ...dto,
+      account: acc
+        ? {
+            id: acc._id.toString(),
+            role: acc.role,
+            isSuperAdmin: acc.email.toLowerCase().trim() === superEmail,
+          }
+        : null,
+    };
+  });
 }
 
 export async function createUser(input: CreateUserInput): Promise<UserDTO> {

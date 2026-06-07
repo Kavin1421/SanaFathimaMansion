@@ -1,6 +1,7 @@
 import { connectDb } from "@/lib/db";
+import { superAdminEmail } from "@/lib/super-admin";
 import type { RegisterAccountInput, UpdateAccountProfileInput } from "@/lib/validation";
-import { Account } from "@/models/Account";
+import { Account, type AccountRole } from "@/models/Account";
 import bcrypt from "bcryptjs";
 import { User } from "@/models/User";
 
@@ -9,6 +10,7 @@ export type AccountProfileDTO = {
   name: string;
   email: string;
   image?: string;
+  role: "admin" | "user";
   ledgerUserId?: string;
 };
 
@@ -17,6 +19,7 @@ function toProfileDTO(acc: {
   name: string;
   email: string;
   image?: string;
+  role: "admin" | "user";
   ledgerUserId?: { toString(): string };
 }): AccountProfileDTO {
   return {
@@ -24,13 +27,14 @@ function toProfileDTO(acc: {
     name: acc.name,
     email: acc.email,
     image: acc.image,
+    role: acc.role,
     ledgerUserId: acc.ledgerUserId?.toString(),
   };
 }
 
 export async function getAccountProfile(accountId: string): Promise<AccountProfileDTO | null> {
   await connectDb();
-  const acc = await Account.findById(accountId).select("name email image ledgerUserId").lean();
+  const acc = await Account.findById(accountId).select("name email image ledgerUserId role").lean();
   if (!acc) return null;
   return toProfileDTO(acc);
 }
@@ -63,7 +67,7 @@ export async function updateAccountProfile(
       : { $set: accountUpdate };
 
   const acc = await Account.findByIdAndUpdate(accountId, mongoAccountUpdate, { new: true })
-    .select("name email image ledgerUserId")
+    .select("name email image ledgerUserId role")
     .lean();
   if (!acc) return null;
 
@@ -116,4 +120,42 @@ export async function registerAccount(input: RegisterAccountInput): Promise<{ id
 export async function setOnboardingCompleted(accountId: string, completed: boolean): Promise<void> {
   await connectDb();
   await Account.findByIdAndUpdate(accountId, { onboardingCompleted: completed });
+}
+
+export async function countHouseAdmins(): Promise<number> {
+  await connectDb();
+  return Account.countDocuments({ role: "admin" });
+}
+
+export async function setAccountRole(
+  accountId: string,
+  role: AccountRole,
+): Promise<{ id: string; email: string; role: AccountRole; ledgerUserId?: string } | null> {
+  await connectDb();
+  const acc = await Account.findById(accountId).select("email role ledgerUserId").lean();
+  if (!acc) return null;
+
+  const email = acc.email.toLowerCase().trim();
+  if (email === superAdminEmail()) {
+    throw new Error("Super Admin access is fixed and cannot be changed here.");
+  }
+
+  if (acc.role === "admin" && role === "user") {
+    const adminCount = await countHouseAdmins();
+    if (adminCount <= 1) {
+      throw new Error("Keep at least one household Admin. Promote someone else first.");
+    }
+  }
+
+  const updated = await Account.findByIdAndUpdate(accountId, { $set: { role } }, { new: true })
+    .select("_id email role ledgerUserId")
+    .lean();
+  if (!updated) return null;
+
+  return {
+    id: updated._id.toString(),
+    email: updated.email,
+    role: updated.role,
+    ledgerUserId: updated.ledgerUserId?.toString(),
+  };
 }

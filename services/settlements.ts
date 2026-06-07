@@ -13,6 +13,8 @@ function toDTO(s: {
   status: "pending" | "completed" | "confirmed";
   confirmedBy?: { toString(): string };
   confirmedAt?: Date;
+  proofUrl?: string;
+  note?: string;
 }): SettlementDTO {
   return {
     _id: s._id.toString(),
@@ -23,6 +25,8 @@ function toDTO(s: {
     status: s.status,
     confirmedBy: s.confirmedBy?.toString(),
     confirmedAt: s.confirmedAt?.toISOString(),
+    proofUrl: s.proofUrl,
+    note: s.note,
   };
 }
 
@@ -39,6 +43,8 @@ export async function listSettlements(): Promise<SettlementDTO[]> {
       status: s.status,
       confirmedBy: s.confirmedBy as { toString(): string } | undefined,
       confirmedAt: s.confirmedAt,
+      proofUrl: s.proofUrl,
+      note: s.note,
     }),
   );
 }
@@ -52,6 +58,8 @@ export async function recordCompletedSettlement(input: CreateSettlementInput): P
     amount: input.amount,
     date: input.date ?? new Date(),
     status: "completed",
+    ...(input.proofUrl ? { proofUrl: input.proofUrl } : {}),
+    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
   });
   await recomputeAllUserBalances();
   return toDTO(doc);
@@ -91,5 +99,7 @@ export async function confirmSettlement(input: {
     status: doc.status,
     confirmedBy: doc.confirmedBy as { toString(): string } | undefined,
     confirmedAt: doc.confirmedAt,
+    proofUrl: doc.proofUrl,
+    note: doc.note,
   });
 }

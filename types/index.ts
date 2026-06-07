@@ -47,6 +47,12 @@ export type UserDTO = {
   avatar?: string;
   totalPaid: number;
   balance: number;
+  /** Linked sign-in account, when the roommate has registered. */
+  account?: {
+    id: string;
+    role: "admin" | "user";
+    isSuperAdmin: boolean;
+  } | null;
 };
 
 export type ExpenseDTO = {
@@ -63,6 +69,11 @@ export type ExpenseDTO = {
   notes?: string;
   description?: string;
   billImage?: string;
+  status?: "pending" | "approved" | "rejected";
+  rejectionReason?: string;
+  currency?: string;
+  originalAmount?: number;
+  exchangeRate?: number;
   comments?: {
     _id: string;
     accountId: string;
@@ -87,6 +98,54 @@ export type SettlementDTO = {
   status: "pending" | "completed" | "confirmed";
   confirmedBy?: string;
   confirmedAt?: string;
+  proofUrl?: string;
+  note?: string;
+};
+
+export type WalletAmendmentDTO = {
+  id: string;
+  monthKey: string;
+  previousBudget: number;
+  additionalAmount: number;
+  newBudget: number;
+  performedByName: string;
+  createdAt: string;
+};
+
+export type RecurringExpenseDTO = {
+  _id: string;
+  title: string;
+  amount: number;
+  category: ExpenseCategory;
+  paidBy: string;
+  splitEnabled: boolean;
+  splitMode: "equal" | "custom";
+  splitBetween: string[];
+  dayOfMonth: number;
+  active: boolean;
+  lastPostedMonthKey?: string;
+};
+
+export type SavingsGoalDTO = {
+  _id: string;
+  title: string;
+  targetAmount: number;
+  currentAmount: number;
+  active: boolean;
+  progress: number;
+};
+
+export type MonthlyStoryDTO = {
+  monthKey: string;
+  monthLabel: string;
+  totalSpent: number;
+  previousMonthTotal: number;
+  percentChange?: number;
+  topCategory?: { category: ExpenseCategory; total: number; emoji: string };
+  biggestExpense?: { title: string; amount: number };
+  topSpender?: { name: string; totalPaid: number };
+  walletUsedPercent?: number;
+  pendingApprovals: number;
 };
 
 export type SettlementSuggestion = {
@@ -122,6 +181,9 @@ export type MonthlySummary = {
   monthRemaining: number | null;
   monthWalletProgress: number | null;
   budgetAlertLevel: "none" | "warn" | "over";
+  overspendAcknowledged?: boolean;
+  pendingExpensesCount: number;
+  recurringDueCount: number;
   topSpenderLabel?: string;
   categoryBreakdown: { category: ExpenseCategory; total: number; emoji: string }[];
   perUserContribution: { userId: string; name: string; paid: number }[];

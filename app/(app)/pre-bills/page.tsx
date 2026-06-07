@@ -1,6 +1,6 @@
 import { PreBillsListClient } from "@/components/pre-bills/pre-bills-list-client";
 import { authOptions } from "@/lib/auth-options";
-import { isSuperAdminSession } from "@/lib/super-admin";
+import { isHouseAdminSession } from "@/lib/admin";
 import { getServerSession } from "next-auth";
 
 export default async function PreBillsPage() {
@@ -19,7 +19,7 @@ export default async function PreBillsPage() {
     <PreBillsListClient
       currentUserId={ledgerId}
       userEmail={session?.user?.email ?? null}
-      isSuperAdmin={isSuperAdminSession(session)}
+      isSuperAdmin={isHouseAdminSession(session)}
     />
   );
 }

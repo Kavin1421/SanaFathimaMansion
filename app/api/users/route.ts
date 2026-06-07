@@ -42,7 +42,7 @@ export async function POST(req: Request) {
         targetEntity: { type: "user", label: "POST /api/users" },
       });
     } catch {}
-    return NextResponse.json({ error: "Only super admin can invite users" }, { status: 403 });
+    return NextResponse.json({ error: "Only an admin can invite users" }, { status: 403 });
   }
   try {
     const body = await req.json();

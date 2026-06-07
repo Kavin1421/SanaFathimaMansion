@@ -38,6 +38,15 @@ Derived from the codebase (`README.md`), product notes (`notes/product-review-an
 | **Engagement** | Cron-friendly **reminders** and **monthly summary** (when configured). |
 | **Collaboration** | **Comments and reactions** on expenses. |
 | **Preferences** | **Reminder preferences** (channels, quiet hours, frequency) per user. |
+| **Roles** | **Super Admin / Admin / Member** with permissions card on Profile. |
+| **Wallet amend** | Add funds with confirm sheet (existing + add = total); funding history + CSV. |
+| **Trust UX** | Expense **impact preview**, settlement confirm sheet, **5-min undo** on new expenses. |
+| **Governance** | **Pending expense approval** queue for admins; members propose spends. |
+| **Automation** | **Recurring expense templates** with post-now preview. |
+| **Goals** | **Savings goals** with contribute confirm flow. |
+| **Global spend** | **Multi-currency** expenses with INR conversion preview. |
+| **Delight** | **Monthly story card** (shareable); budget threshold alerts with Add funds CTA. |
+| **Pre-Bills+** | **Book as expense wizard** (multi-step) from finalized lists. |
 
 ---
 
@@ -62,16 +71,15 @@ Derived from the codebase (`README.md`), product notes (`notes/product-review-an
 
 ---
 
-## Roadmap teasers (from `product-review-and-roadmap-2026-05-06.md`)
+## Roadmap teasers
 
-Position as **coming next** or waitlist hooks:
+Most interaction features from the June 2026 upgrade doc are **shipped**. Optional future polish:
 
-- **Smart nudge composer** — One-tap reminders with context (WhatsApp / email angles in roadmap).
-- **Richer settlement experience** — “Settlement room” with status and proof (vision).
-- **Shareable monthly story** — Top spender, categories, month-over-month; share to WhatsApp.
-- **Real-time activity feed** — Dashboard timeline for expenses, settlements, invites.
+- Live FX rates for multi-currency (today: reference rates + manual override)
+- Cron auto-post recurring expenses on due day
+- Auto Telegram monthly story on last day of month
 
-Framing: *Strong on correctness and notifications today; next wave is daily interaction and shareable moments.*
+Framing: *Confirm-before-commit on every money action — expenses, wallet, settlements, goals.*
 
 ---
 
@@ -95,4 +103,4 @@ Framing: *Strong on correctness and notifications today; next wave is daily inte
 
 ## Maintenance
 
-Refresh this file when you ship major features (e.g. new notification types, pre-bill flows, or roadmap items that graduate to “shipped”).
+Refresh when shipping major features. Last updated: 2026-06-06 (feature upgrade batch — see `notes/feature-upgrade-ideas-2026-06-06.md`).

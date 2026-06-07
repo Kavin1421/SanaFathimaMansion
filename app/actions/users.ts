@@ -54,7 +54,7 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionRe
         targetEntity: { type: "user", label: "createUserAction" },
       });
     } catch {}
-    return { ok: false, error: "Only a super admin can invite roommates" };
+    return { ok: false, error: "Only an admin can invite roommates" };
   }
   const parsed = createUserSchema.safeParse(input);
   if (!parsed.success) {
@@ -134,7 +134,7 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionRe
         targetEntity: { type: "user", label: "updateUserAction" },
       });
     } catch {}
-    return { ok: false, error: "Only a super admin can edit roommates" };
+    return { ok: false, error: "Only an admin can edit roommates" };
   }
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success) {
@@ -202,7 +202,7 @@ export async function deleteUserAction(id: string): Promise<ActionResult<null>> 
         targetEntity: { type: "user", id, label: "deleteUserAction" },
       });
     } catch {}
-    return { ok: false, error: "Only a super admin can remove roommates" };
+    return { ok: false, error: "Only an admin can remove roommates" };
   }
   try {
     const before = await getUserById(id);
@@ -243,7 +243,7 @@ export async function resendInviteAction(userId: string): Promise<ActionResult<{
     return { ok: false, error: "Unauthorized" };
   }
   if (!isAdminSession(session)) {
-    return { ok: false, error: "Only a super admin can resend invites" };
+    return { ok: false, error: "Only an admin can resend invites" };
   }
   try {
     const user = await getUserById(userId);

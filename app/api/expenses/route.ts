@@ -18,6 +18,8 @@ export async function GET(req: Request) {
     const paidBy = searchParams.get("paidBy") ?? undefined;
     const search = searchParams.get("search") ?? undefined;
 
+    const includePending = searchParams.get("includePending") === "true";
+
     const cat =
       category && EXPENSE_CATEGORIES.includes(category as ExpenseCategory)
         ? (category as ExpenseCategory)
@@ -28,6 +30,7 @@ export async function GET(req: Request) {
       category: cat,
       paidBy: paidBy ?? undefined,
       search: search ?? undefined,
+      includePending,
     });
     return NextResponse.json(expenses);
   } catch (e) {

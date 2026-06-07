@@ -1,15 +1,17 @@
 "use client";
 
-import { sendSettlementNudgeAction, settleAction } from "@/app/actions/settlements";
+import { sendSettlementNudgeAction } from "@/app/actions/settlements";
+import { SettlementConfirmDialog } from "@/components/settlements/settlement-confirm-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { isHouseAdminUser } from "@/lib/roles";
 import { queryKeys } from "@/lib/query-keys";
 import { formatInr } from "@/lib/utils";
-import type { MonthlySummary } from "@/types";
+import type { MonthlySummary, SettlementSuggestion } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, BellRing } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -31,7 +33,7 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
   const qc = useQueryClient();
   const { data: session } = useSession();
   const actorLedgerUserId = session?.user?.ledgerUserId ?? null;
-  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin);
+  const isHouseAdmin = isHouseAdminUser(session?.user);
   const [nudgeOpen, setNudgeOpen] = useState(false);
   const [nudgeKey, setNudgeKey] = useState<string | null>(null);
   const [tone, setTone] = useState<"friendly" | "firm" | "custom">("friendly");
@@ -39,25 +41,9 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
   const [channelInApp, setChannelInApp] = useState(true);
   const [channelTelegram, setChannelTelegram] = useState(true);
   const [channelEmail, setChannelEmail] = useState(true);
+  const [settleSuggestion, setSettleSuggestion] = useState<SettlementSuggestion | null>(null);
+  const [settleOpen, setSettleOpen] = useState(false);
 
-  const settleMut = useMutation({
-    mutationFn: async (p: { fromUser: string; toUser: string; amount: number }) => {
-      const r = await settleAction({
-        fromUser: p.fromUser,
-        toUser: p.toUser,
-        amount: p.amount,
-        date: new Date(),
-      });
-      if (!r.ok) throw new Error(r.error);
-      return r.data;
-    },
-    onSuccess: () => {
-      toast.success("Settlement recorded");
-      qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
-      qc.invalidateQueries({ queryKey: queryKeys.users });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
   const nudgeMut = useMutation({
     mutationFn: async (p: { fromUserId: string; toUserId: string; amount: number }) => {
       const r = await sendSettlementNudgeAction({
@@ -91,6 +77,11 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
     [nudgeKey, suggestions],
   );
 
+  function openSettle(suggestion: SettlementSuggestion) {
+    setSettleSuggestion(suggestion);
+    setSettleOpen(true);
+  }
+
   return (
     <section className="dashboard-surface col-span-12 p-6 md:p-8">
       <div className="mb-8">
@@ -107,7 +98,7 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
           {suggestions.map((x, i) => (
             (() => {
               const canSettle =
-                isSuperAdmin ||
+                isHouseAdmin ||
                 (actorLedgerUserId != null &&
                   (actorLedgerUserId === x.fromUserId || actorLedgerUserId === x.toUserId));
               return (
@@ -148,15 +139,9 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
 
               <Button
                 className="w-full shrink-0 rounded-xl sm:w-auto"
-                disabled={settleMut.isPending || !canSettle}
-                title={!canSettle ? "Only participants (or super admin) can mark this settlement." : undefined}
-                onClick={() =>
-                  settleMut.mutate({
-                    fromUser: x.fromUserId,
-                    toUser: x.toUserId,
-                    amount: x.amount,
-                  })
-                }
+                disabled={!canSettle}
+                title={!canSettle ? "Only participants (or an admin) can mark this settlement." : undefined}
+                onClick={() => openSettle(x)}
               >
                 Mark as Settled
               </Button>
@@ -184,6 +169,20 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
           ))}
         </ul>
       )}
+
+      <SettlementConfirmDialog
+        open={settleOpen}
+        onOpenChange={(o) => {
+          setSettleOpen(o);
+          if (!o) setSettleSuggestion(null);
+        }}
+        suggestion={settleSuggestion}
+        balances={summary.balances}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
+          qc.invalidateQueries({ queryKey: queryKeys.users });
+        }}
+      />
 
       <Dialog open={nudgeOpen} onOpenChange={setNudgeOpen}>
         <DialogContent className="rounded-2xl sm:max-w-lg">

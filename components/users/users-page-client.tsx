@@ -28,10 +28,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { HouseholdAccessPanel } from "@/components/users/household-access-panel";
+import { RoleBadge } from "@/components/users/role-badge";
 import { queryKeys } from "@/lib/query-keys";
+import { isHouseAdminUser } from "@/lib/roles";
 import { formatInr } from "@/lib/utils";
 import type { UserDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -44,6 +46,7 @@ import { toast } from "sonner";
 export function UsersPageClient() {
   const { data: session } = useSession();
   const isSuperAdmin = Boolean(session?.user?.isSuperAdmin);
+  const isHouseAdmin = isHouseAdminUser(session?.user);
   const qc = useQueryClient();
   const { data: users, isLoading } = useQuery({
     queryKey: queryKeys.users,
@@ -132,6 +135,8 @@ export function UsersPageClient() {
 
   return (
     <div className="space-y-6">
+      {isSuperAdmin && users ? <HouseholdAccessPanel users={users} /> : null}
+
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="min-w-0">
           <h2 className="text-2xl font-semibold tracking-tight">Roommates</h2>
@@ -143,8 +148,8 @@ export function UsersPageClient() {
             .
           </p>
         </div>
-        {isSuperAdmin ? (
-          <Button className="h-11 rounded-xl gap-1 md:w-auto" onClick={openCreate}>
+        {isHouseAdmin ? (
+          <Button className="h-11 gap-1 rounded-xl md:w-auto" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Invite roommate
           </Button>
@@ -170,9 +175,18 @@ export function UsersPageClient() {
                   <div className="min-w-0">
                     <CardTitle className="truncate text-lg">{u.name}</CardTitle>
                     <CardDescription className="truncate">{u.email}</CardDescription>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {u.account ? (
+                        <RoleBadge role={u.account.role} isSuperAdmin={u.account.isSuperAdmin} />
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          No account yet
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
-                {isSuperAdmin ? (
+                {isHouseAdmin ? (
                   <div className="flex gap-1 self-end sm:self-start">
                     {u.status === "invited" ? (
                       <Button
@@ -268,11 +282,7 @@ export function UsersPageClient() {
             </div>
           </div>
           <DialogFooter>
-            <Button
-              className="rounded-xl"
-              disabled={saveMut.isPending}
-              onClick={() => saveMut.mutate()}
-            >
+            <Button className="rounded-xl" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
               {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Save
             </Button>

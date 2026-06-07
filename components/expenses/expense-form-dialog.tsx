@@ -1,6 +1,7 @@
 "use client";
 
-import { createExpenseAction, updateExpenseAction } from "@/app/actions/expenses";
+import { createExpenseAction, undoExpenseAction, updateExpenseAction } from "@/app/actions/expenses";
+import { ExpenseImpactPreview } from "@/components/expenses/expense-impact-preview";
 import { CategoryIcon } from "@/components/icons/category-icon";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,15 +18,17 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currency";
+import { resolveInrAmount } from "@/lib/expense-preview";
 import { queryKeys } from "@/lib/query-keys";
 import { roundMoney } from "@/lib/ledger";
-import { cn } from "@/lib/utils";
+import { cn, formatInr } from "@/lib/utils";
 import type { ExpenseCategory, ExpenseDTO, UserDTO } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type Props = {
@@ -45,6 +48,8 @@ type Props = {
   defaultPaidById?: string;
   /** Called after a successful create (not update) */
   onCreated?: (expense: ExpenseDTO) => void;
+  /** Current ledger balances for impact preview */
+  currentBalances?: Record<string, number>;
 };
 
 function FormFields({
@@ -76,6 +81,10 @@ function FormFields({
   billImage,
   setBillImage,
   uploading,
+  currency,
+  setCurrency,
+  originalAmount,
+  setOriginalAmount,
   onUploadFile,
   onRemoveImage,
 }: {
@@ -83,6 +92,10 @@ function FormFields({
   setTitle: (v: string) => void;
   amount: string;
   setAmount: (v: string) => void;
+  currency: SupportedCurrency;
+  setCurrency: (v: SupportedCurrency) => void;
+  originalAmount: string;
+  setOriginalAmount: (v: string) => void;
   amountRef: React.RefObject<HTMLInputElement>;
   category: string;
   setCategory: (v: string) => void;
@@ -123,18 +136,54 @@ function FormFields({
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="amount">Amount (₹)</Label>
-        <Input
-          ref={amountRef}
-          id="amount"
-          type="number"
-          min={1}
-          step="1"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="rounded-xl text-2xl font-semibold md:text-3xl"
-        />
+        <Label>Currency</Label>
+        <Select value={currency} onValueChange={(v) => setCurrency(v as SupportedCurrency)}>
+          <SelectTrigger className="rounded-xl">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="rounded-xl">
+            {SUPPORTED_CURRENCIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+      {currency === "INR" ? (
+        <div className="space-y-2">
+          <Label htmlFor="amount">Amount (₹)</Label>
+          <Input
+            ref={amountRef}
+            id="amount"
+            type="number"
+            min={1}
+            step="1"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="rounded-xl text-2xl font-semibold md:text-3xl"
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label htmlFor="original-amount">Original amount ({currency})</Label>
+          <Input
+            ref={amountRef}
+            id="original-amount"
+            type="number"
+            min={0.01}
+            step="0.01"
+            value={originalAmount}
+            onChange={(e) => setOriginalAmount(e.target.value)}
+            className="rounded-xl text-2xl font-semibold md:text-3xl"
+          />
+          {originalAmount && Number(originalAmount) > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              ≈ {formatInr(resolveInrAmount({ amount: 0, paidBy: "", splitEnabled: true, splitMode: "equal", splitBetween: [], currency, originalAmount: Number(originalAmount) }))}
+            </p>
+          ) : null}
+        </div>
+      )}
       <div className="space-y-2">
         <Label>Category</Label>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -314,6 +363,7 @@ export function ExpenseFormDialog({
   preBillSeed,
   defaultPaidById,
   onCreated,
+  currentBalances: currentBalancesProp,
 }: Props) {
   const qc = useQueryClient();
   const reduceMotion = useReducedMotion();
@@ -321,6 +371,11 @@ export function ExpenseFormDialog({
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<SupportedCurrency>("INR");
+  const [originalAmount, setOriginalAmount] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [fetchedBalances, setFetchedBalances] = useState<Record<string, number>>({});
+  const [previewBalances, setPreviewBalances] = useState<Record<string, number>>({});
   const [category, setCategory] = useState<string>("Groceries");
   const [paidBy, setPaidBy] = useState<string>("");
   const [splitEnabled, setSplitEnabled] = useState(true);
@@ -374,6 +429,8 @@ export function ExpenseFormDialog({
       setNotes(expense.notes ?? "");
       setDescription(expense.description ?? (expense.category === "Others" ? expense.notes ?? "" : ""));
       setBillImage(expense.billImage ?? "");
+      setCurrency((expense.currency as SupportedCurrency) ?? "INR");
+      setOriginalAmount(expense.originalAmount != null ? String(expense.originalAmount) : "");
     } else if (users.length) {
       const payerDefault =
         defaultPaidById && users.some((u) => u._id === defaultPaidById)
@@ -401,9 +458,13 @@ export function ExpenseFormDialog({
             : "",
         );
         setBillImage("");
+        setCurrency("INR");
+        setOriginalAmount("");
       } else {
         setTitle("");
         setAmount("");
+        setCurrency("INR");
+        setOriginalAmount("");
         setCategory("Groceries");
         setPaidBy(payerDefault);
         setSplitEnabled(true);
@@ -424,31 +485,126 @@ export function ExpenseFormDialog({
     return () => cancelAnimationFrame(t);
   }, [open, expense]);
 
+  const userNames = useMemo(
+    () => Object.fromEntries(users.map((u) => [u._id, u.name])),
+    [users],
+  );
+
+  function buildPreviewInput() {
+    const inrAmt = currency === "INR" ? Number(amount) : resolveInrAmount({
+      amount: 0,
+      paidBy,
+      splitEnabled,
+      splitMode,
+      splitBetween: Array.from(splitIds),
+      currency,
+      originalAmount: Number(originalAmount),
+    });
+    let splitAmounts: { userId: string; amount: number }[] | undefined;
+    if (splitEnabled && splitMode === "custom") {
+      splitAmounts = Array.from(splitIds).map((userId) => ({
+        userId,
+        amount: Number(customAmounts[userId] ?? 0),
+      }));
+    }
+    return {
+      amount: inrAmt,
+      paidBy,
+      splitEnabled,
+      splitMode,
+      splitBetween: Array.from(splitIds),
+      splitAmounts,
+      currency,
+      originalAmount: currency !== "INR" ? Number(originalAmount) : undefined,
+    };
+  }
+
+  function validateForm(): string | null {
+    const inrAmt =
+      currency === "INR"
+        ? Number(amount)
+        : resolveInrAmount({
+            amount: 0,
+            paidBy,
+            splitEnabled,
+            splitMode,
+            splitBetween: Array.from(splitIds),
+            currency,
+            originalAmount: Number(originalAmount),
+          });
+    if (!title.trim() || !paidBy || !dateStr || !(inrAmt > 0)) {
+      return "Fill title, amount, payer, and date";
+    }
+    if (category === "Others" && !description.trim()) {
+      return "Description is required for Others";
+    }
+    if (description.trim() && !/[A-Za-z]/.test(description.trim())) {
+      return "Description should contain meaningful text, not only numbers/symbols";
+    }
+    if (splitEnabled && splitIds.size === 0) {
+      return "Pick at least one person to split with";
+    }
+    if (splitEnabled && splitMode === "custom") {
+      const splitAmounts = Array.from(splitIds).map((userId) => ({
+        userId,
+        amount: Number(customAmounts[userId] ?? 0),
+      }));
+      const sum = splitAmounts.reduce((s, row) => s + row.amount, 0);
+      if (Math.abs(sum - inrAmt) > 0.01) {
+        return "Custom split amounts must add up to the expense total";
+      }
+    }
+    return null;
+  }
+
+  async function openPreview() {
+    const err = validateForm();
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    let balances = currentBalancesProp ?? fetchedBalances;
+    if (Object.keys(balances).length === 0) {
+      try {
+        const res = await fetch(`/api/dashboard?month=${encodeURIComponent(monthKey)}`);
+        if (res.ok) {
+          const dash = await res.json();
+          balances = Object.fromEntries(
+            dash.balances.map((b: { userId: string; balance: number }) => [b.userId, b.balance]),
+          );
+          setFetchedBalances(balances);
+        }
+      } catch {
+        /* preview still works with empty balances */
+      }
+    }
+    setPreviewBalances(balances);
+    setPreviewOpen(true);
+  }
+
   const mut = useMutation({
     mutationFn: async () => {
-      const amt = Number(amount);
-      if (!title.trim() || !paidBy || !dateStr || !(amt > 0)) {
-        throw new Error("Fill title, amount, payer, and date");
-      }
-      if (category === "Others" && !description.trim()) {
-        throw new Error("Description is required for Others");
-      }
-      if (description.trim() && !/[A-Za-z]/.test(description.trim())) {
-        throw new Error("Description should contain meaningful text, not only numbers/symbols");
-      }
-      if (splitEnabled && splitIds.size === 0) {
-        throw new Error("Pick at least one person to split with");
-      }
+      const err = validateForm();
+      if (err) throw new Error(err);
+      const inrAmt =
+        currency === "INR"
+          ? Number(amount)
+          : resolveInrAmount({
+              amount: 0,
+              paidBy,
+              splitEnabled,
+              splitMode,
+              splitBetween: Array.from(splitIds),
+              currency,
+              originalAmount: Number(originalAmount),
+            });
+      const amt = inrAmt;
       let splitAmounts: { userId: string; amount: number }[] | undefined;
       if (splitEnabled && splitMode === "custom") {
         splitAmounts = Array.from(splitIds).map((userId) => ({
           userId,
           amount: Number(customAmounts[userId] ?? 0),
         }));
-        const sum = splitAmounts.reduce((s, row) => s + row.amount, 0);
-        if (Math.abs(sum - amt) > 0.01) {
-          throw new Error("Custom split amounts must add up to the expense total");
-        }
       }
       const trimmedBill = billImage.trim();
       const base = {
@@ -463,6 +619,7 @@ export function ExpenseFormDialog({
         date: new Date(dateStr),
         notes: notes.trim() || undefined,
         description: description.trim() || undefined,
+        ...(currency !== "INR" ? { currency, originalAmount: Number(originalAmount) } : {}),
       };
       if (expense) {
         const billImagePayload = trimmedBill.length > 0 ? trimmedBill : null;
@@ -479,7 +636,31 @@ export function ExpenseFormDialog({
       return r.data;
     },
     onSuccess: (data) => {
-      toast.success(expense ? "Expense updated" : "Expense added");
+      setPreviewOpen(false);
+      if (expense) {
+        toast.success("Expense updated");
+      } else {
+        toast.success("Expense added", {
+          duration: 5 * 60 * 1000,
+          action: data
+            ? {
+                label: "Undo",
+                onClick: () => {
+                  void undoExpenseAction(data._id).then((r) => {
+                    if (r.ok) {
+                      toast.success("Expense undone");
+                      qc.invalidateQueries({ queryKey: ["expenses"] });
+                      qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
+                      qc.invalidateQueries({ queryKey: ["activity"] });
+                    } else {
+                      toast.error(r.error);
+                    }
+                  });
+                },
+              }
+            : undefined,
+        });
+      }
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
       qc.invalidateQueries({ queryKey: ["activity"] });
@@ -514,6 +695,10 @@ export function ExpenseFormDialog({
     setTitle,
     amount,
     setAmount,
+    currency,
+    setCurrency,
+    originalAmount,
+    setOriginalAmount,
     amountRef,
     category,
     setCategory,
@@ -548,10 +733,10 @@ export function ExpenseFormDialog({
         type="button"
         className="w-full rounded-xl sm:w-auto"
         disabled={mut.isPending || uploading}
-        onClick={() => mut.mutate()}
+        onClick={() => void openPreview()}
       >
         {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        Save
+        Review & save
       </Button>
     </motion.div>
   );
@@ -567,31 +752,49 @@ export function ExpenseFormDialog({
     return () => mq.removeEventListener("change", fn);
   }, []);
 
+  const previewDialog = (
+    <ExpenseImpactPreview
+      open={previewOpen}
+      onOpenChange={setPreviewOpen}
+      input={previewOpen ? buildPreviewInput() : null}
+      userNames={userNames}
+      currentBalances={currentBalancesProp ?? previewBalances}
+      busy={mut.isPending}
+      onConfirm={() => mut.mutate()}
+    />
+  );
+
   if (desktop) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{expense ? "Edit expense" : "New expense"}</DialogTitle>
-          </DialogHeader>
-          <FormFields {...formProps} />
-          <DialogFooter>{footer}</DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{expense ? "Edit expense" : "New expense"}</DialogTitle>
+            </DialogHeader>
+            <FormFields {...formProps} />
+            <DialogFooter>{footer}</DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {previewDialog}
+      </>
     );
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[92vh] flex-col rounded-t-2xl p-4">
-        <SheetHeader className="text-left">
-          <SheetTitle>{expense ? "Edit expense" : "New expense"}</SheetTitle>
-        </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <FormFields {...formProps} />
-        </div>
-        <div className="border-t pt-4">{footer}</div>
-      </SheetContent>
-    </Sheet>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="bottom" className="flex max-h-[92vh] flex-col rounded-t-2xl p-4">
+          <SheetHeader className="text-left">
+            <SheetTitle>{expense ? "Edit expense" : "New expense"}</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <FormFields {...formProps} />
+          </div>
+          <div className="border-t pt-4">{footer}</div>
+        </SheetContent>
+      </Sheet>
+      {previewDialog}
+    </>
   );
 }

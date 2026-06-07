@@ -23,6 +23,7 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   UPDATE_BUDGET: "Budget updated",
   UPDATE_USER: "User updated",
   UPDATE_ACCOUNT_PROFILE: "Profile updated",
+  SET_ACCOUNT_ROLE: "Account role changed",
   UPDATE_REMINDER_PREFS: "Reminder preferences updated",
   DELETE_USER: "User deleted",
   CREATE_PRE_BILL: "Pre-bill created",
@@ -31,6 +32,12 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   LINK_PRE_BILL_EXPENSE: "Pre-bill linked to expense",
   DELETE_PRE_BILL: "Pre-bill deleted",
   UPDATE_FINALIZED_PRE_BILL: "Finalized pre-bill updated",
+  APPROVE_EXPENSE: "Expense approved",
+  REJECT_EXPENSE: "Expense rejected",
+  UNDO_EXPENSE: "Expense undone",
+  RECURRING_EXPENSE_POSTED: "Recurring expense posted",
+  SAVINGS_GOAL_CONTRIBUTION: "Savings goal contribution",
+  ACKNOWLEDGE_OVERSPEND: "Overspend acknowledged",
 };
 
 const TARGET_TYPE_LABELS: Record<string, string> = {
@@ -128,6 +135,20 @@ export function auditLogSummaryLine(row: AuditLogRow): string {
     case "LINK_PRE_BILL_EXPENSE":
     case "DELETE_PRE_BILL":
       return targetEntity.label?.trim() || fallback;
+    case "APPROVE_EXPENSE":
+    case "REJECT_EXPENSE":
+    case "UNDO_EXPENSE": {
+      const e = expenseSnapshot(newValue) ?? expenseSnapshot(previousValue);
+      return e ? `${e.title} · ${formatInr(e.amount)}` : fallback;
+    }
+    case "RECURRING_EXPENSE_POSTED":
+      return targetEntity.label?.trim() || "Recurring expense posted";
+    case "SAVINGS_GOAL_CONTRIBUTION":
+      return targetEntity.label?.trim() || "Savings contribution";
+    case "ACKNOWLEDGE_OVERSPEND":
+      return newValue?.monthKey != null && typeof newValue.monthKey === "string"
+        ? `Acknowledged overspend for ${newValue.monthKey}`
+        : "Overspend acknowledged";
     default:
       return fallback;
   }

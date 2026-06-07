@@ -7,6 +7,7 @@ import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/aud
 import { isAdminSession } from "@/lib/admin";
 import {
   createExpenseSchema,
+  rejectExpenseSchema,
   updateExpenseSchema,
   type CreateExpenseInput,
   type UpdateExpenseInput,
@@ -15,10 +16,13 @@ import { notifyTelegramExpense } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import {
   addExpenseComment,
+  approveExpense,
   createExpense,
   deleteExpense,
   getExpenseById,
+  rejectExpense,
   toggleExpenseReaction,
+  undoExpense,
   updateExpense,
 } from "@/services/expenses";
 import type { ActionResult } from "./users";
@@ -56,7 +60,11 @@ export async function createExpenseAction(
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
   }
   try {
-    const data = await createExpense(parsed.data);
+    const payload = {
+      ...parsed.data,
+      status: isAdminSession(session) ? (parsed.data.status ?? "approved") : ("pending" as const),
+    };
+    const data = await createExpense(payload);
     try {
       await appendAuditLog({
         actionType: "CREATE_EXPENSE",
@@ -126,7 +134,7 @@ export async function updateExpenseAction(
           newValue: toAuditJson({ reason: "not_owner_or_admin", actorLedgerUserId, paidBy: before.paidBy }),
         });
       } catch {}
-      return { ok: false, error: "Only super admin or expense owner can edit this expense" };
+      return { ok: false, error: "Only an admin or expense owner can edit this expense" };
     }
     const data = await updateExpense(parsed.data);
     if (!data) return { ok: false, error: "Expense not found" };
@@ -181,7 +189,7 @@ export async function deleteExpenseAction(id: string): Promise<ActionResult<null
         targetEntity: { type: "expense", id, label: "deleteExpenseAction" },
       });
     } catch {}
-    return { ok: false, error: "Only a super admin can delete expenses" };
+    return { ok: false, error: "Only an admin can delete expenses" };
   }
   try {
     const before = await getExpenseById(id);
@@ -279,5 +287,107 @@ export async function toggleExpenseReactionAction(input: {
     return { ok: true, data };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Could not update reaction" };
+  }
+}
+
+export async function approveExpenseAction(
+  id: string,
+): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof approveExpense>>>>> {
+  const session = await requireUserSession();
+  if (!session) return { ok: false, error: "Unauthorized" };
+  if (!isAdminSession(session)) return { ok: false, error: "Only an admin can approve expenses" };
+  try {
+    const before = await getExpenseById(id);
+    if (!before) return { ok: false, error: "Expense not found" };
+    const data = await approveExpense(id);
+    if (!data) return { ok: false, error: "Expense not pending" };
+    try {
+      await appendAuditLog({
+        actionType: "APPROVE_EXPENSE",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id: data._id, label: data.title },
+        previousValue: toAuditJson(before),
+        newValue: toAuditJson(data),
+      });
+    } catch (e) {
+      console.error("[audit] approve expense", e);
+    }
+    notifyTelegramExpense(data, "updated");
+    revalidatePath("/dashboard");
+    revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not approve expense" };
+  }
+}
+
+export async function rejectExpenseAction(
+  input: { id: string; reason: string },
+): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof rejectExpense>>>>> {
+  const session = await requireUserSession();
+  if (!session) return { ok: false, error: "Unauthorized" };
+  if (!isAdminSession(session)) return { ok: false, error: "Only an admin can reject expenses" };
+  const parsed = rejectExpenseSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
+  }
+  try {
+    const before = await getExpenseById(parsed.data.id);
+    if (!before) return { ok: false, error: "Expense not found" };
+    const data = await rejectExpense(parsed.data.id, parsed.data.reason);
+    if (!data) return { ok: false, error: "Expense not pending" };
+    try {
+      await appendAuditLog({
+        actionType: "REJECT_EXPENSE",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id: data._id, label: data.title },
+        previousValue: toAuditJson(before),
+        newValue: toAuditJson(data),
+      });
+    } catch (e) {
+      console.error("[audit] reject expense", e);
+    }
+    revalidatePath("/dashboard");
+    revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not reject expense" };
+  }
+}
+
+export async function undoExpenseAction(
+  id: string,
+): Promise<ActionResult<NonNullable<Awaited<ReturnType<typeof undoExpense>>>>> {
+  const session = await requireUserSession();
+  if (!session) return { ok: false, error: "Unauthorized" };
+  try {
+    const before = await getExpenseById(id);
+    if (!before) return { ok: false, error: "Expense not found" };
+    const actorLedgerUserId = session.user.ledgerUserId ?? null;
+    const canUndo =
+      isAdminSession(session) || (actorLedgerUserId != null && actorLedgerUserId === before.paidBy);
+    if (!canUndo) {
+      return { ok: false, error: "Only an admin or expense owner can undo" };
+    }
+    const data = await undoExpense(id);
+    if (!data) return { ok: false, error: "Expense not found" };
+    try {
+      await appendAuditLog({
+        actionType: "UNDO_EXPENSE",
+        performedBy: performerFromSession(session),
+        targetEntity: { type: "expense", id, label: before.title },
+        previousValue: toAuditJson(before),
+      });
+    } catch (e) {
+      console.error("[audit] undo expense", e);
+    }
+    revalidatePath("/dashboard");
+    revalidatePath("/expenses");
+    revalidatePath("/audit-logs");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not undo expense" };
   }
 }

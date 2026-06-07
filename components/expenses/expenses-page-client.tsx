@@ -14,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,13 +36,14 @@ import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { Eye, Pencil, Plus, Share2, Trash2 } from "lucide-react";
+import { isHouseAdminUser } from "@/lib/roles";
 import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
   const { data: session } = useSession();
-  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin);
+  const isHouseAdmin = isHouseAdminUser(session?.user);
   const actorLedgerUserId = session?.user?.ledgerUserId ?? null;
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -90,6 +92,20 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
     },
     refetchInterval,
   });
+
+  const { data: dashboard } = useQuery({
+    queryKey: queryKeys.dashboard(monthKey),
+    queryFn: async () => {
+      const r = await fetch(`/api/dashboard?month=${encodeURIComponent(monthKey)}`);
+      if (!r.ok) throw new Error("dashboard");
+      return r.json();
+    },
+  });
+
+  const currentBalances = useMemo(() => {
+    if (!dashboard?.balances) return {};
+    return Object.fromEntries(dashboard.balances.map((b: { userId: string; balance: number }) => [b.userId, b.balance]));
+  }, [dashboard]);
 
   const userMap = useMemo(() => new Map(users.map((u) => [u._id, u.name])), [users]);
 
@@ -148,7 +164,14 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
     <div className="space-y-5 md:space-y-6">
       <div className="flex flex-col justify-between gap-3 sm:gap-4 md:flex-row md:items-center">
         <div className="min-w-0">
-          <h2 className="text-2xl font-semibold tracking-tight">Expenses</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold tracking-tight">Expenses</h2>
+            {dashboard?.pendingExpensesCount > 0 ? (
+              <Badge variant="secondary" className="rounded-full">
+                {dashboard.pendingExpensesCount} pending
+              </Badge>
+            ) : null}
+          </div>
           <p className="text-sm text-muted-foreground">
             Filter by month, category, or payer. You can edit expenses you created.
           </p>
@@ -218,7 +241,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
           ) : (
             <ul className="divide-y">
               {expenses.map((e) => {
-                const canEditExpense = isSuperAdmin || (actorLedgerUserId != null && actorLedgerUserId === e.paidBy);
+                const canEditExpense = isHouseAdmin || (actorLedgerUserId != null && actorLedgerUserId === e.paidBy);
                 return (
                   <li key={e._id}>
                     <div
@@ -244,7 +267,14 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                           />
                         ) : null}
                         <div className="min-w-0 flex-1 space-y-1">
-                          <p className="font-medium leading-snug">{e.title}</p>
+                          <p className="font-medium leading-snug">
+                            {e.title}
+                            {e.status === "pending" ? (
+                              <Badge variant="secondary" className="ml-2 rounded-full text-[10px]">
+                                Pending
+                              </Badge>
+                            ) : null}
+                          </p>
                           <p className="truncate text-xs text-muted-foreground">
                             {e.category} · Paid by {userMap.get(e.paidBy) ?? "?"} ·{" "}
                             {new Date(e.date).toLocaleDateString()}
@@ -291,7 +321,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                                 size="sm"
                                 variant="outline"
                                 className="h-9 rounded-xl"
-                                title={isSuperAdmin ? "Edit expense" : "You can edit your own expense"}
+                                title={isHouseAdmin ? "Edit expense" : "You can edit your own expense"}
                                 onClick={() => {
                                   setEditing(e);
                                   setDialogOpen(true);
@@ -299,7 +329,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                               >
                                 <Pencil className="h-4 w-4 shrink-0" />
                               </Button>
-                              {isSuperAdmin ? (
+                              {isHouseAdmin ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -331,6 +361,7 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
           if (!o) setEditing(null);
         }}
         expense={editing}
+        currentBalances={currentBalances}
       />
 
       <ExpenseDetailDialog

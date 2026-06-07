@@ -1,7 +1,7 @@
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { monthKeyFromDate } from "@/lib/dates";
 
-type Props = { searchParams: { month?: string } };
+type Props = { searchParams: { month?: string; amendWallet?: string } };
 
 export default function DashboardPage({ searchParams }: Props) {
   const monthKey =
@@ -9,5 +9,5 @@ export default function DashboardPage({ searchParams }: Props) {
       ? searchParams.month
       : monthKeyFromDate(new Date());
 
-  return <DashboardView monthKey={monthKey} />;
+  return <DashboardView monthKey={monthKey} amendWallet={searchParams.amendWallet} />;
 }

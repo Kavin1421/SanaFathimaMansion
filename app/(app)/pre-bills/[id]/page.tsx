@@ -1,6 +1,6 @@
 import { PreBillDetailClient } from "@/components/pre-bills/pre-bill-detail-client";
 import { authOptions } from "@/lib/auth-options";
-import { isSuperAdminSession } from "@/lib/super-admin";
+import { isHouseAdminSession } from "@/lib/admin";
 import { getPreBillById } from "@/services/pre-bills";
 import { getUserById } from "@/services/users";
 import { getServerSession } from "next-auth";
@@ -17,7 +17,7 @@ export default async function PreBillDetailPage({ params }: { params: { id: stri
       initialData={preBill}
       creatorName={creator?.name ?? "Unknown"}
       currentUserLedgerId={ledgerId}
-      isSuperAdmin={isSuperAdminSession(session)}
+      isSuperAdmin={isHouseAdminSession(session)}
     />
   );
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EXPENSE_CATEGORIES, PRE_BILL_UNITS } from "@/lib/constants";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 const preBillUnitEnum = z.enum(PRE_BILL_UNITS);
 
@@ -63,6 +64,11 @@ export const changePasswordSchema = z
 const splitAmountEntrySchema = z.object({
   userId: objectIdString,
   amount: z.number().positive(),
+});
+
+export const setAccountRoleSchema = z.object({
+  accountId: objectIdString,
+  role: z.enum(["admin", "user"]),
 });
 
 export const updateReminderPreferencesSchema = z.object({
@@ -150,6 +156,10 @@ const expenseFields = {
   notes: z.string().max(2000).optional(),
   description: z.string().max(2000).optional(),
   billImage: billImageUrlSchema,
+  status: z.enum(["pending", "approved", "rejected"]).optional(),
+  currency: z.enum(SUPPORTED_CURRENCIES).optional(),
+  originalAmount: z.number().positive().optional(),
+  exchangeRate: z.number().positive().optional(),
 };
 
 export const expenseBaseSchema = z
@@ -278,7 +288,49 @@ export const createSettlementSchema = z.object({
   toUser: objectIdString,
   amount: z.number().positive(),
   date: z.coerce.date().optional(),
+  proofUrl: billImageUrlSchema,
+  note: z.string().max(500).optional(),
 });
+
+export const createRecurringExpenseSchema = z.object({
+  title: z.string().min(1).max(120),
+  amount: z.number().positive(),
+  category: z.enum(EXPENSE_CATEGORIES),
+  paidBy: objectIdString,
+  splitEnabled: z.boolean().default(true),
+  splitMode: z.enum(["equal", "custom"]).default("equal"),
+  splitBetween: z.array(objectIdString).default([]),
+  dayOfMonth: z.number().int().min(1).max(28),
+  active: z.boolean().default(true),
+});
+
+export const createSavingsGoalSchema = z.object({
+  title: z.string().min(1).max(120),
+  targetAmount: z.number().positive(),
+});
+
+export const contributeSavingsGoalSchema = z.object({
+  id: objectIdString,
+  amount: z.number().positive(),
+});
+
+export const rejectExpenseSchema = z.object({
+  id: objectIdString,
+  reason: z.string().min(1).max(500),
+});
+
+export const acknowledgeOverspendSchema = z.object({
+  monthKey: z.string().regex(/^\d{4}-\d{2}$/),
+});
+
+export const updateBudgetThresholdsSchema = z
+  .object({
+    budgetThresholdWarn: z.number().min(0).max(1).optional(),
+    budgetThresholdOver: z.number().min(0).max(1).optional(),
+  })
+  .refine((d) => d.budgetThresholdWarn != null || d.budgetThresholdOver != null, {
+    message: "Provide at least one threshold",
+  });
 
 export const completeSettlementSchema = z.object({
   id: objectIdString,
@@ -337,6 +389,7 @@ export type SignupFormInput = z.infer<typeof signupFormSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type UpdateAccountProfileInput = z.infer<typeof updateAccountProfileSchema>;
+export type SetAccountRoleInput = z.infer<typeof setAccountRoleSchema>;
 export type UpdateReminderPreferencesInput = z.infer<typeof updateReminderPreferencesSchema>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
@@ -347,3 +400,9 @@ export type FinalizePreBillInput = z.infer<typeof finalizePreBillSchema>;
 export type LinkPreBillExpenseInput = z.infer<typeof linkPreBillExpenseSchema>;
 export type DeletePreBillInput = z.infer<typeof deletePreBillSchema>;
 export type TogglePreBillItemPurchasedInput = z.infer<typeof togglePreBillItemPurchasedSchema>;
+export type CreateRecurringExpenseInput = z.infer<typeof createRecurringExpenseSchema>;
+export type CreateSavingsGoalInput = z.infer<typeof createSavingsGoalSchema>;
+export type ContributeSavingsGoalInput = z.infer<typeof contributeSavingsGoalSchema>;
+export type RejectExpenseInput = z.infer<typeof rejectExpenseSchema>;
+export type AcknowledgeOverspendInput = z.infer<typeof acknowledgeOverspendSchema>;
+export type UpdateBudgetThresholdsInput = z.infer<typeof updateBudgetThresholdsSchema>;

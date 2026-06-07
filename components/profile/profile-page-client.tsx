@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RoleBadge } from "@/components/users/role-badge";
+import { RolePermissionsCard } from "@/components/profile/role-permissions-card";
 import { queryKeys } from "@/lib/query-keys";
 import type { UserDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -146,8 +148,13 @@ export function ProfilePageClient() {
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Your profile</h2>
-        <p className="text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-2xl font-semibold tracking-tight">Your profile</h2>
+          {session?.user ? (
+            <RoleBadge role={session.user.role} isSuperAdmin={session.user.isSuperAdmin} />
+          ) : null}
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
           Update your name, photo, reminders, and password.
         </p>
       </div>
@@ -238,6 +245,8 @@ export function ProfilePageClient() {
           </div>
         </CardContent>
       </Card>
+
+      <RolePermissionsCard />
 
       {myUser ? (
         <Card className="rounded-2xl border shadow-sm">

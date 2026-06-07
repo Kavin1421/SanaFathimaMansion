@@ -2,6 +2,7 @@ import { eachDayOfInterval, format, subDays } from "date-fns";
 import { CATEGORY_META, type ExpenseCategory } from "@/lib/constants";
 import { connectDb } from "@/lib/db";
 import { monthRange, previousMonthKey } from "@/lib/dates";
+import { filterApprovedExpenses } from "@/lib/expense-ledger-utils";
 import {
   computeBalances,
   computeTotalPaidByUser,
@@ -16,6 +17,8 @@ import { HouseMonth } from "@/models/HouseMonth";
 import { Settlement } from "@/models/Settlement";
 import { User } from "@/models/User";
 import type { DailySpendPoint, MonthlySummary, SettlementSuggestion } from "@/types";
+import { getHouseSettings, isOverspendAcknowledged } from "./house-settings-ext";
+import { countDueForMonth } from "./recurring-expenses";
 
 function buildDailySpendSeries(
   monthExpenses: { date: Date; amount: number }[],
@@ -112,11 +115,17 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
   const prevKey = previousMonthKey(monthKey);
   const { start: prevStart, end: prevEnd } = monthRange(prevKey);
 
-  const [users, allExpenses, allSettlements] = await Promise.all([
-    User.find().sort({ name: 1 }).lean(),
-    Expense.find().lean(),
-    Settlement.find().lean(),
-  ]);
+  const [users, allExpensesRaw, allSettlements, houseSettings, pendingExpensesCount, recurringDueCount] =
+    await Promise.all([
+      User.find().sort({ name: 1 }).lean(),
+      Expense.find().lean(),
+      Settlement.find().lean(),
+      getHouseSettings(),
+      Expense.countDocuments({ status: "pending" }),
+      countDueForMonth(monthKey),
+    ]);
+
+  const allExpenses = filterApprovedExpenses(allExpensesRaw);
 
   const userMap = new Map(users.map((u) => [u._id.toString(), u.name]));
 
@@ -148,11 +157,16 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
   const monthRemaining = monthBudget != null ? roundMoney(monthBudget - totalSpent) : null;
   const monthWalletProgress =
     monthBudget != null && monthBudget > 0 ? Math.min(1, totalSpent / monthBudget) : null;
+
+  const warnThreshold = houseSettings.budgetThresholdWarn ?? 0.8;
+  const overThreshold = houseSettings.budgetThresholdOver ?? 1;
   let budgetAlertLevel: "none" | "warn" | "over" = "none";
   if (monthBudget != null && monthBudget > 0) {
-    if (totalSpent >= monthBudget) budgetAlertLevel = "over";
-    else if (totalSpent / monthBudget >= 0.8) budgetAlertLevel = "warn";
+    const ratio = totalSpent / monthBudget;
+    if (ratio >= overThreshold) budgetAlertLevel = "over";
+    else if (ratio >= warnThreshold) budgetAlertLevel = "warn";
   }
+  const overspendAcknowledged = isOverspendAcknowledged(houseSettings, monthKey);
 
   const categoryTotals: Record<ExpenseCategory, number> = {
     Rent: 0,
@@ -317,6 +331,9 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
     monthRemaining,
     monthWalletProgress,
     budgetAlertLevel,
+    overspendAcknowledged,
+    pendingExpensesCount,
+    recurringDueCount,
     topSpenderLabel,
     categoryBreakdown,
     perUserContribution,

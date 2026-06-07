@@ -60,7 +60,7 @@ export async function settleAction(
         }),
       });
     } catch {}
-    return { ok: false, error: "You can only settle your own balances unless you are super admin" };
+    return { ok: false, error: "You can only settle your own balances unless you are an admin" };
   }
   try {
     const data = await recordCompletedSettlement(parsed.data);
@@ -207,7 +207,7 @@ export async function confirmSettlementAction(input: {
       actorLedgerUserId != null &&
       (actorLedgerUserId === settlement.fromUser || actorLedgerUserId === settlement.toUser);
     if (!isAdminSession(session) && !actorIsParticipant) {
-      return { ok: false, error: "Only participants (or super admin) can confirm settlement" };
+      return { ok: false, error: "Only participants (or an admin) can confirm settlement" };
     }
 
     const data = await confirmSettlement({

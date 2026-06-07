@@ -225,6 +225,31 @@ function formatWalletBudgetHtml(data: {
   return lines.join("\n");
 }
 
+function formatWalletBudgetAmendedHtml(data: {
+  appName: string;
+  monthLabel: string;
+  previousBudget: number;
+  additionalAmount: number;
+  budget: number;
+  detailUrl?: string;
+}): string {
+  const lines = [
+    `📅 <b>${escapeHtml(data.appName)}</b>`,
+    "💰 <b>Monthly wallet amended</b>",
+    "",
+    `📆 <b>${escapeHtml(data.monthLabel)}</b>`,
+    `Existing: ${boldRupee(data.previousBudget)}`,
+    `Added: ${boldRupee(data.additionalAmount)}`,
+    `New total: ${boldRupee(data.budget)}`,
+    "",
+    escapeHtml(DIVIDER),
+  ];
+  if (data.detailUrl) {
+    lines.push("", "🔗 <b>Open in app</b>", escapeHtml(data.detailUrl));
+  }
+  return lines.join("\n");
+}
+
 async function recordEvent(input: {
   eventType: string;
   status: "sent" | "failed" | "skipped";
@@ -541,6 +566,34 @@ export function notifyTelegramMonthReset(
       });
     } catch (e) {
       console.error("[telegram-notify] month reset", e);
+    }
+  })();
+}
+
+export function notifyTelegramWalletBudgetAmended(
+  monthKey: string,
+  amounts: { previousBudget: number; additionalAmount: number; budget: number },
+): void {
+  void (async () => {
+    try {
+      await connectDb();
+      const appName = await getHouseDisplayName();
+      const detailUrl = appDetailUrl(monthKey);
+      const monthStart = parse(`${monthKey}-01`, "yyyy-MM-dd", new Date());
+      const monthLabel = format(monthStart, "MMMM yyyy");
+      const html = formatWalletBudgetAmendedHtml({
+        appName,
+        monthLabel,
+        ...amounts,
+        detailUrl: detailUrl ?? undefined,
+      });
+      await sendPipeline({
+        html,
+        eventType: "telegram_wallet_amended",
+        metadata: { monthKey, ...amounts },
+      });
+    } catch (e) {
+      console.error("[telegram-notify] wallet amend", e);
     }
   })();
 }

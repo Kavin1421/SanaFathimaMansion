@@ -36,7 +36,10 @@ function isProtectedApi(path: string) {
     path.startsWith("/api/audit-logs") ||
     path.startsWith("/api/notification-events") ||
     path.startsWith("/api/openapi") ||
-    path.startsWith("/api/pre-bills")
+    path.startsWith("/api/pre-bills") ||
+    path.startsWith("/api/wallet") ||
+    path.startsWith("/api/savings-goals") ||
+    path.startsWith("/api/recurring-expenses")
   );
 }
 
@@ -132,5 +135,11 @@ export const config = {
     "/api/notification-events/:path*",
     "/api/openapi",
     "/api/openapi/:path*",
+    "/api/wallet",
+    "/api/wallet/:path*",
+    "/api/savings-goals",
+    "/api/savings-goals/:path*",
+    "/api/recurring-expenses",
+    "/api/recurring-expenses/:path*",
   ],
 };

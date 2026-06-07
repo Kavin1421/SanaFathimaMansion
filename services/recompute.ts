@@ -5,6 +5,7 @@ import {
   type LedgerExpense,
   type LedgerSettlement,
 } from "@/lib/ledger";
+import { filterApprovedExpenses } from "@/lib/expense-ledger-utils";
 import { Expense } from "@/models/Expense";
 import { Settlement } from "@/models/Settlement";
 import { User } from "@/models/User";
@@ -44,7 +45,9 @@ export async function recomputeAllUserBalances(): Promise<void> {
     User.find().lean(),
   ]);
 
-  const ledgerExpenses: LedgerExpense[] = expenses.map((e) =>
+  const approvedExpenses = filterApprovedExpenses(expenses);
+
+  const ledgerExpenses: LedgerExpense[] = approvedExpenses.map((e) =>
     toLedgerExpense({
       amount: e.amount,
       paidBy: e.paidBy,

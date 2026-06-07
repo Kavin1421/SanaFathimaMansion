@@ -7,9 +7,13 @@ import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardRecentTable } from "@/components/dashboard/dashboard-recent-table";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
+import { ExpenseApprovalQueue } from "@/components/dashboard/expense-approval-queue";
+import { MonthlyStoryCard } from "@/components/dashboard/monthly-story-card";
 import { NotificationsStack } from "@/components/dashboard/notifications-stack";
 import { PersonalBalanceHint } from "@/components/dashboard/personal-balance-hint";
 import { OwesList } from "@/components/dashboard/owes-list";
+import { RecurringExpensesBanner } from "@/components/dashboard/recurring-expenses-panel";
+import { SavingsGoalsCard } from "@/components/dashboard/savings-goals-card";
 import { SpendChart } from "@/components/dashboard/spend-chart";
 import { UserBarChart } from "@/components/dashboard/user-bar-chart";
 import { WalletCard } from "@/components/dashboard/wallet-card";
@@ -21,6 +25,7 @@ import { formatInr } from "@/lib/utils";
 import type { MonthlySummary } from "@/types";
 import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
 
 function buildSummaryText(s: MonthlySummary): string {
   const lines = [
@@ -34,8 +39,23 @@ function buildSummaryText(s: MonthlySummary): string {
   return lines.join("\n");
 }
 
-export function DashboardView({ monthKey }: { monthKey: string }) {
+function parseAmendWallet(raw?: string | null): number | null {
+  if (!raw?.trim()) return null;
+  const n = Number(raw.replace(/,/g, "").trim());
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+export function DashboardView({
+  monthKey,
+  amendWallet,
+}: {
+  monthKey: string;
+  amendWallet?: string | null;
+}) {
   const refetchInterval = useRefetchIntervalMs(20_000);
+  const [amendPrefill, setAmendPrefill] = useState<number | null>(() => parseAmendWallet(amendWallet));
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.dashboard(monthKey),
     queryFn: async (): Promise<MonthlySummary> => {
@@ -45,6 +65,23 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
     },
     refetchInterval,
   });
+
+  const currentBalances = useMemo(() => {
+    if (!data) return {};
+    return Object.fromEntries(data.balances.map((b) => [b.userId, b.balance]));
+  }, [data]);
+
+  const handleAddFunds = useCallback(() => {
+    if (data?.monthRemaining != null && data.monthRemaining < 0) {
+      setAmendPrefill(Math.ceil(Math.abs(data.monthRemaining)));
+      return;
+    }
+    document.getElementById("admin-month-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [data?.monthRemaining]);
+
+  const handleAmendConsumed = useCallback(() => {
+    setAmendPrefill(null);
+  }, []);
 
   if (isLoading) return <DashboardSkeleton />;
   if (isError || !data) {
@@ -71,9 +108,24 @@ export function DashboardView({ monthKey }: { monthKey: string }) {
 
       <YourBalanceCard summary={s} />
 
-      <WalletCard summary={s} />
+      <WalletCard summary={s} monthKey={monthKey} onAddFunds={handleAddFunds} />
 
-      <AdminMonthPanel monthKey={monthKey} summary={s} />
+      <div id="admin-month-panel" className="col-span-12">
+        <AdminMonthPanel
+          monthKey={monthKey}
+          summary={s}
+          initialAmendAmount={amendPrefill}
+          onInitialAmendConsumed={handleAmendConsumed}
+        />
+      </div>
+
+      <RecurringExpensesBanner monthKey={monthKey} summary={s} currentBalances={currentBalances} />
+
+      <ExpenseApprovalQueue monthKey={monthKey} summary={s} currentBalances={currentBalances} />
+
+      <MonthlyStoryCard monthKey={monthKey} />
+
+      <SavingsGoalsCard />
 
       <BalanceHero summary={s} />
 
