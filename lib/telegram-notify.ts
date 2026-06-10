@@ -20,9 +20,11 @@ import {
 import type { ExpenseDTO, PreBillDTO } from "@/types";
 import { format, parse } from "date-fns";
 
-const DIVIDER = "━━━━━━━━━━━━━━━";
+const DIVIDER = "╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌";
+const BANNER_BAR = "▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰";
 const DEFAULT_APP_WEBSITE = "https://sana.sukeshiitj.me/";
 const SUPPORT_EMAIL = "hello@teamgodevs.in";
+const DOT = " · ";
 
 function appWebsiteUrl(): string {
   const raw =
@@ -38,18 +40,119 @@ function telegramFooterHtml(): string {
   return [
     "",
     escapeHtml(DIVIDER),
-    `🌐 <a href="${escapeHtml(url)}">${escapeHtml(host)}</a>`,
-    `📧 Queries: <a href="mailto:${escapeHtml(SUPPORT_EMAIL)}">${escapeHtml(SUPPORT_EMAIL)}</a>`,
+    `🌐 <a href="${escapeHtml(url)}"><b>${escapeHtml(host)}</b></a>`,
+    `💬 <a href="mailto:${escapeHtml(SUPPORT_EMAIL)}">${escapeHtml(SUPPORT_EMAIL)}</a>`,
   ].join("\n");
 }
 
 function telegramFooterPlain(): string {
+  return ["", DIVIDER, `🌐 ${appWebsiteUrl()}`, `💬 ${SUPPORT_EMAIL}`].join("\n");
+}
+
+function msgBlockquote(lines: string[]): string {
+  return `<blockquote>${lines.join("\n")}</blockquote>`;
+}
+
+function msgBanner(appName: string, subtitle: string, icon: string): string {
   return [
-    "",
-    DIVIDER,
-    `🌐 ${appWebsiteUrl()}`,
-    `📧 Queries: ${SUPPORT_EMAIL}`,
+    escapeHtml(BANNER_BAR),
+    `${icon} <b>${escapeHtml(appName)}</b>`,
+    `<i>${escapeHtml(subtitle)}</i>`,
+    escapeHtml(BANNER_BAR),
   ].join("\n");
+}
+
+function msgOpenLink(detailUrl: string, label = "🔗 Open in app"): string {
+  return `<a href="${escapeHtml(detailUrl)}"><b>${escapeHtml(label.replace(/^🔗\s*/, ""))}</b></a>`;
+}
+
+function expenseVariantMeta(variant: NonNullable<ExpenseAlertPayload["variant"]>): {
+  icon: string;
+  subtitle: string;
+  badge: string | null;
+} {
+  switch (variant) {
+    case "pending":
+      return { icon: "⏳", subtitle: "Expense submitted", badge: "⏳ AWAITING APPROVAL" };
+    case "approved":
+      return { icon: "✅", subtitle: "Expense approved", badge: "✅ APPROVED" };
+    case "rejected":
+      return { icon: "❌", subtitle: "Expense rejected", badge: "❌ REJECTED" };
+    case "updated":
+      return { icon: "✏️", subtitle: "Expense updated", badge: null };
+    case "settlement":
+      return { icon: "🤝", subtitle: "Settlement recorded", badge: null };
+    default:
+      return { icon: "✨", subtitle: "New expense", badge: null };
+  }
+}
+
+function budgetProgressBar(pct: number): string {
+  const capped = Math.min(100, Math.max(0, pct));
+  const filled = Math.round(capped / 10);
+  const empty = Math.max(0, 10 - filled);
+  const bar = `${"▓".repeat(filled)}${"░".repeat(empty)}`;
+  const over = pct > 100 ? ` <b>⚠️ ${pct}%</b>` : ` <b>${pct}%</b>`;
+  return `${bar}${over}`;
+}
+
+function formatSplitLine(data: ExpenseAlertPayload): string {
+  if (!data.isSplit) return "<i>🏠 Whole household · no member split</i>";
+  if (data.splitCount > 1 && data.splitShareAmount != null) {
+    if (data.splitMembers && data.splitMembers.length > 0) {
+      const members = data.splitMembers
+        .map((m) => `   • ${escapeHtml(m.name)} ${boldRupee(m.amount)}`)
+        .join("\n");
+      return `<i>👥 Split among ${data.splitCount}</i>\n${members}`;
+    }
+    return `<i>👥 Equal split · ${boldRupee(data.splitShareAmount)} each · ${data.splitCount} people</i>`;
+  }
+  return `<i>👥 Split · ${data.splitCount} member${data.splitCount === 1 ? "" : "s"}</i>`;
+}
+
+function formatStatusLine(data: ExpenseAlertPayload, variant: NonNullable<ExpenseAlertPayload["variant"]>): string | null {
+  const meta = expenseVariantMeta(variant);
+  if (variant === "pending") {
+    return `<b>${escapeHtml(meta.badge ?? "")}</b>\n<i>Wallet updates after admin approval</i>`;
+  }
+  if (variant === "approved") {
+    const by = data.approvedByName ? ` · ${escapeHtml(data.approvedByName)}` : "";
+    return `<b>${escapeHtml(meta.badge ?? "")}</b>${by ? `\n<i>Approved by${by}</i>` : ""}`;
+  }
+  if (variant === "rejected") {
+    const by = data.rejectedByName ? ` · ${escapeHtml(data.rejectedByName)}` : "";
+    const reason = data.rejectionReason ? `\n<i>${escapeHtml(data.rejectionReason)}</i>` : "";
+    return `<b>${escapeHtml(meta.badge ?? "")}</b>${by ? `\n<i>Rejected by${by}</i>` : ""}${reason}`;
+  }
+  return null;
+}
+
+function formatExpenseCard(data: ExpenseAlertPayload, amt: string): string {
+  const em = data.categoryEmoji || "💸";
+  return msgBlockquote([
+    `<b>${em} ${escapeHtml(data.title)}</b>`,
+    `💰 ${amt}`,
+    `👤 ${escapeHtml(data.payerName)}${escapeHtml(DOT)}🏷 ${escapeHtml(data.categoryLabel)}`,
+    `📅 ${escapeHtml(data.dateLine)}`,
+    formatSplitLine(data),
+  ]);
+}
+
+function formatWalletCard(data: ExpenseAlertPayload): string | null {
+  const lines: string[] = ["<b>💳 MONTHLY WALLET</b>"];
+  if (data.walletRemaining != null) {
+    lines.push(`${boldRupee(data.walletRemaining)} <i>remaining</i>`);
+  }
+  if (data.budgetUsagePercent != null) {
+    lines.push(budgetProgressBar(data.budgetUsagePercent));
+  }
+  if (data.totalSpent != null && data.budget != null) {
+    lines.push(`📊 ${boldRupee(data.totalSpent)} <i>of</i> ${boldRupee(data.budget)} <i>spent</i>`);
+  } else if (data.budget == null && data.walletRemaining == null) {
+    lines.push("<i>Set a monthly budget in the app</i>");
+  }
+  if (lines.length <= 1) return null;
+  return msgBlockquote(lines);
 }
 
 /** Truncate HTML safely so Telegram caption limits do not break mid-tag. */
@@ -102,9 +205,9 @@ function formatPreBillItemLineHtml(item: PreBillDTO["items"][number]): string {
   const qty =
     item.quantity % 1 === 0 ? String(item.quantity) : String(item.quantity);
   const qtyUnit = item.unit === "pcs" ? `${qty} ${item.unit}` : `${qty}${item.unit}`;
-  const base = `• ${escapeHtml(item.name)} - ${escapeHtml(qtyUnit)}`;
+  const base = `• ${escapeHtml(item.name)}${escapeHtml(DOT)}${escapeHtml(qtyUnit)}`;
   if (typeof item.price === "number" && item.price >= 0) {
-    return `${base} · <b>₹${escapeHtml(String(item.price.toLocaleString("en-IN")))}</b>`;
+    return `${base}${escapeHtml(DOT)}<b>₹${escapeHtml(String(item.price.toLocaleString("en-IN")))}</b>`;
   }
   return base;
 }
@@ -140,149 +243,52 @@ export type ExpenseNotifyMode = "created" | "updated" | "pending" | "approved";
 function formatExpenseAlertHtml(data: ExpenseAlertPayload): string {
   const amt = boldRupee(data.amount);
   const variant = data.variant ?? "created";
+  const { icon, subtitle } = expenseVariantMeta(variant);
 
   if (variant === "settlement") {
     const to = escapeHtml(data.settlementToName ?? "?");
-    const lines = [
-      `💸 <b>${escapeHtml(data.appName)}</b>`,
-      "✅ <b>Settlement recorded</b>",
+    const parts = [
+      msgBanner(data.appName, subtitle, icon),
       "",
-      `🤝 <b>${escapeHtml(data.payerName)}</b> → <b>${to}</b>`,
-      `💵 Amount: ${amt}`,
-      "",
-      `📆 ${escapeHtml(data.dateLine)}`,
-      "",
-      escapeHtml(DIVIDER),
+      msgBlockquote([
+        `<b>🤝 ${escapeHtml(data.payerName)}</b> → <b>${to}</b>`,
+        `💰 ${amt}`,
+        `📅 ${escapeHtml(data.dateLine)}`,
+      ]),
     ];
-    if (data.walletRemaining != null || data.budget != null) {
-      lines.push("", "💰 <b>Wallet balance</b>");
-      if (data.walletRemaining != null) {
-        lines.push(`${boldRupee(data.walletRemaining)} remaining`);
-      }
-      if (data.totalSpent != null && data.budget != null) {
-        lines.push(`Spent: ${boldRupee(data.totalSpent)} of ${boldRupee(data.budget)}`);
-      }
-      if (data.budgetUsagePercent != null) {
-        const pct = data.budgetUsagePercent;
-        lines.push(
-          pct > 100
-            ? `⚠️ <b>Budget ·</b> ${pct}% used — <b>over cap</b>`
-            : `📊 <b>Budget ·</b> ${pct}% used`,
-        );
-      }
-    }
+    const wallet = formatWalletCard(data);
+    if (wallet) parts.push("", wallet);
     if (data.detailUrl) {
-      lines.push("", "🔗 <b>Ledger</b>", escapeHtml(data.detailUrl));
+      parts.push("", msgOpenLink(data.detailUrl, "🔗 Open ledger"));
     }
-    return lines.join("\n");
+    return parts.join("\n");
   }
 
-  const em = data.categoryEmoji || "💸";
-  const headerSuffix =
-    variant === "pending"
-      ? "⏳ Expense submitted — awaiting approval"
-      : variant === "approved"
-        ? "✅ Expense approved"
-        : variant === "rejected"
-          ? "❌ Expense rejected"
-          : variant === "updated"
-            ? "✏️ Expense updated"
-            : "✨ New expense";
-  const header = `${em} <b>${escapeHtml(data.appName)}</b>`;
-  const sub = `<i>${escapeHtml(headerSuffix)}</i>`;
+  const parts: string[] = [msgBanner(data.appName, subtitle, icon), ""];
 
-  const titleLine = `📝 <b>${escapeHtml(data.title)}</b>`;
-  const paidLine = `👤 <b>${escapeHtml(data.payerName)}</b> paid ${amt}`;
-
-  const metaLine = `📆 ${em} <b>${escapeHtml(data.categoryLabel)}</b> · ${escapeHtml(data.dateLine)}`;
-
-  let splitBlock: string;
-  if (!data.isSplit) {
-    splitBlock = `🏠 <b>House expense</b>\n👥 Split · <b>not applicable</b>`;
-  } else if (data.splitCount > 1 && data.splitShareAmount != null) {
-    const memberLines =
-      data.splitMembers && data.splitMembers.length > 0
-        ? data.splitMembers
-            .map((m) => `• ${escapeHtml(m.name)}: ${boldRupee(m.amount)}`)
-            .join("\n")
-        : null;
-    splitBlock = memberLines
-      ? `👥 <b>Shared split details</b>\n${memberLines}`
-      : `👥 <b>Shared ·</b> ${boldRupee(data.splitShareAmount)} each · ${data.splitCount} people`;
-  } else {
-    splitBlock = `👥 <b>Split ·</b> ${data.splitCount} member${data.splitCount === 1 ? "" : "s"}`;
+  const statusLine = formatStatusLine(data, variant);
+  if (statusLine) {
+    parts.push(statusLine, "");
   }
+
+  parts.push(formatExpenseCard(data, amt));
 
   const showWallet = variant !== "pending" && variant !== "rejected";
-
-  const statusBlock =
-    variant === "pending"
-      ? "⏳ <b>Status:</b> Waiting for admin approval\n<i>Not yet in household wallet or balances.</i>"
-      : variant === "approved"
-        ? `✅ <b>Status:</b> Approved${data.approvedByName ? ` by ${escapeHtml(data.approvedByName)}` : ""} — added to ledger`
-        : variant === "rejected"
-          ? `❌ <b>Status:</b> Rejected${data.rejectedByName ? ` by ${escapeHtml(data.rejectedByName)}` : ""}${data.rejectionReason ? `\n<i>${escapeHtml(data.rejectionReason)}</i>` : ""}`
-          : variant === "created"
-            ? "✅ <b>Status:</b> Recorded in household ledger"
-            : null;
-
-  const parts: string[] = [
-    header,
-    sub,
-    "",
-    titleLine,
-    paidLine,
-    "",
-    metaLine,
-    "",
-    splitBlock,
-  ];
-
-  if (statusBlock) {
-    parts.push("", statusBlock);
-  }
-
-  parts.push("", escapeHtml(DIVIDER));
-
   if (showWallet) {
-    const walletLines: string[] = ["", "💰 <b>Wallet balance</b>"];
-    if (data.walletRemaining != null) {
-      walletLines.push(`${boldRupee(data.walletRemaining)} remaining`);
-    }
-    if (data.totalSpent != null && data.budget != null) {
-      walletLines.push(`Spent: ${boldRupee(data.totalSpent)} of ${boldRupee(data.budget)}`);
-    } else if (data.budget != null) {
-      walletLines.push("📋 Track spending in the app");
-    } else {
-      walletLines.push("📋 Set a monthly budget in the app");
-    }
-    parts.push(...walletLines);
-
-    if (data.budgetUsagePercent != null) {
-      const pct = data.budgetUsagePercent;
-      const over = pct > 100;
-      parts.push(
-        over
-          ? `⚠️ <b>Budget ·</b> ${pct}% used — <b>over cap</b>`
-          : `📊 <b>Budget ·</b> ${pct}% used`,
-      );
-    }
-  } else if (variant === "pending") {
-    parts.push("", "💡 <i>Wallet updates after an admin approves this expense.</i>");
+    const wallet = formatWalletCard(data);
+    if (wallet) parts.push("", wallet);
   }
 
   if (data.hasBill) {
     const count = data.billCount ?? 1;
     parts.push(
       "",
-      count > 1
-        ? `🧾 <b>${count} receipts</b> attached below`
-        : "🧾 <b>Receipt</b> attached below",
+      count > 1 ? "<b>📎 Receipts attached below</b>" : "<b>📎 Receipt attached below</b>",
     );
   }
 
   if (data.detailUrl) {
-    parts.push("", "🔗 <b>Open in app</b>", escapeHtml(data.detailUrl));
+    parts.push("", msgOpenLink(data.detailUrl));
   }
 
   return parts.join("\n");
@@ -305,17 +311,16 @@ function formatMonthResetHtml(data: {
         : "📌 Fresh month — check preferences in the app.";
 
   const lines = [
-    `📅 <b>${escapeHtml(data.appName)}</b>`,
-    "🌙 <b>New month started</b>",
+    msgBanner(data.appName, "New month started", "🌙"),
     "",
-    `✨ <b>${escapeHtml(data.monthLabel)}</b>`,
-    `💰 Monthly wallet: ${b}`,
-    "",
-    escapeHtml(DIVIDER),
+    msgBlockquote([
+      `<b>📆 ${escapeHtml(data.monthLabel)}</b>`,
+      `💰 Monthly wallet ${b}`,
+    ]),
   ];
-  if (carryLine) lines.push("", escapeHtml(carryLine));
+  if (carryLine) lines.push("", `<i>${escapeHtml(carryLine)}</i>`);
   if (data.detailUrl) {
-    lines.push("", "🔗 <b>Open in app</b>", escapeHtml(data.detailUrl));
+    lines.push("", msgOpenLink(data.detailUrl));
   }
   return lines.join("\n");
 }
@@ -328,16 +333,15 @@ function formatWalletBudgetHtml(data: {
 }): string {
   const b = boldRupee(data.budget);
   const lines = [
-    `📅 <b>${escapeHtml(data.appName)}</b>`,
-    "💰 <b>Monthly wallet updated</b>",
+    msgBanner(data.appName, "Monthly wallet updated", "💰"),
     "",
-    `📆 <b>${escapeHtml(data.monthLabel)}</b>`,
-    `Budget: ${b}`,
-    "",
-    escapeHtml(DIVIDER),
+    msgBlockquote([
+      `<b>📆 ${escapeHtml(data.monthLabel)}</b>`,
+      `Budget set to ${b}`,
+    ]),
   ];
   if (data.detailUrl) {
-    lines.push("", "🔗 <b>Open in app</b>", escapeHtml(data.detailUrl));
+    lines.push("", msgOpenLink(data.detailUrl));
   }
   return lines.join("\n");
 }
@@ -351,18 +355,16 @@ function formatWalletBudgetAmendedHtml(data: {
   detailUrl?: string;
 }): string {
   const lines = [
-    `📅 <b>${escapeHtml(data.appName)}</b>`,
-    "💰 <b>Monthly wallet amended</b>",
+    msgBanner(data.appName, "Wallet topped up", "💰"),
     "",
-    `📆 <b>${escapeHtml(data.monthLabel)}</b>`,
-    `Existing: ${boldRupee(data.previousBudget)}`,
-    `Added: ${boldRupee(data.additionalAmount)}`,
-    `New total: ${boldRupee(data.budget)}`,
-    "",
-    escapeHtml(DIVIDER),
+    msgBlockquote([
+      `<b>📆 ${escapeHtml(data.monthLabel)}</b>`,
+      `${boldRupee(data.previousBudget)} <i>+</i> ${boldRupee(data.additionalAmount)}`,
+      `<b>= ${boldRupee(data.budget)}</b>`,
+    ]),
   ];
   if (data.detailUrl) {
-    lines.push("", "🔗 <b>Open in app</b>", escapeHtml(data.detailUrl));
+    lines.push("", msgOpenLink(data.detailUrl));
   }
   return lines.join("\n");
 }
@@ -514,21 +516,14 @@ export function notifyTelegramPreBillFinalized(
       const detailUrl = preBillDetailUrl(dto._id);
       const itemLines = dto.items.map((i) => formatPreBillItemLineHtml(i)).join("\n");
       const html = [
-        `🏠 <b>${escapeHtml(appName)}</b>`,
+        msgBanner(appName, "Pre-bill finalized", "🧾"),
         "",
-        "🧾 <b>Smart Pre-Bill Finalized</b>",
+        msgBlockquote([`<b>🛒 ${escapeHtml(dto.title)}</b>`, itemLines]),
         "",
-        `🛒 <b>${escapeHtml(dto.title)}</b>`,
-        "",
-        itemLines,
-        "",
-        escapeHtml(DIVIDER),
-        "",
-        `👤 ${escapeHtml(creatorName)}`,
-        `📅 ${escapeHtml(dateLine)}`,
+        `<i>👤 ${escapeHtml(creatorName)}${escapeHtml(DOT)}📅 ${escapeHtml(dateLine)}</i>`,
       ];
       if (detailUrl) {
-        html.push("", "🔗 <b>Open in app</b>", escapeHtml(detailUrl));
+        html.push("", msgOpenLink(detailUrl));
       }
       await sendPipeline({
         html: html.join("\n"),
@@ -556,23 +551,16 @@ export function notifyTelegramPreBillEdited(
       const detailUrl = preBillDetailUrl(dto._id);
       const itemLines = dto.items.map((i) => formatPreBillItemLineHtml(i)).join("\n");
       const html: string[] = [
-        `🏠 <b>${escapeHtml(appName)}</b>`,
+        msgBanner(appName, "Pre-bill updated", "✏️"),
         "",
-        "✏️ <b>Smart Pre-Bill Updated</b>",
-        "<i>Latest version of this finalized pre-bill.</i>",
-        "",
-        `🛒 <b>${escapeHtml(dto.title)}</b>`,
-        "",
-        itemLines,
-        "",
-        escapeHtml(DIVIDER),
+        msgBlockquote([`<b>🛒 ${escapeHtml(dto.title)}</b>`, itemLines]),
       ];
       if (dto.notes?.trim()) {
-        html.push("", `📝 <b>Notes</b>`, escapeHtml(dto.notes.trim()));
+        html.push("", `<i>📝 ${escapeHtml(dto.notes.trim())}</i>`);
       }
-      html.push("", `👤 ${escapeHtml(editorName)}`, `📅 ${escapeHtml(dateLine)}`);
+      html.push("", `<i>👤 ${escapeHtml(editorName)}${escapeHtml(DOT)}📅 ${escapeHtml(dateLine)}</i>`);
       if (detailUrl) {
-        html.push("", "🔗 <b>Open in app</b>", escapeHtml(detailUrl));
+        html.push("", msgOpenLink(detailUrl));
       }
       await sendPipeline({
         html: html.join("\n"),
@@ -594,9 +582,9 @@ export function notifyTelegramPreBillShoppingCompleted(title: string): void {
       const appName = await getHouseDisplayName();
       const t = title.trim() || "Shopping list";
       const html = [
-        `🏠 <b>${escapeHtml(appName)}</b>`,
+        msgBanner(appName, "Shopping complete", "✅"),
         "",
-        `🛒 <b>Shopping completed for ${escapeHtml(t)}</b>`,
+        msgBlockquote([`<b>🛒 ${escapeHtml(t)}</b>`, "<i>All items marked purchased</i>"]),
       ].join("\n");
       await sendPipeline({
         html,
