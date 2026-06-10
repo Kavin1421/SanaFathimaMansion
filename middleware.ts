@@ -1,3 +1,4 @@
+import { isSecureAuthCookies } from "@/lib/auth-env";
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -53,8 +54,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req, secret });
-  const userId = token?.id as string | undefined;
+  const token = await getToken({
+    req,
+    secret,
+    secureCookie: isSecureAuthCookies(),
+  });
+  const userId = (token?.id ?? token?.sub) as string | undefined;
   const onboardingDone = Boolean(token?.onboardingCompleted);
 
   if (isProtectedApi(path)) {

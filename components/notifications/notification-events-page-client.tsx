@@ -6,16 +6,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRefetchIntervalMs } from "@/hooks/use-refetch-interval";
 import { queryKeys } from "@/lib/query-keys";
 import type { NotificationEventRow } from "@/services/notification-events";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { useMemo, useState } from "react";
 
 function statusClass(status: "sent" | "failed" | "skipped"): string {
   if (status === "sent") return "bg-emerald-600/15 text-emerald-800 dark:text-emerald-300";
   if (status === "failed") return "bg-destructive/15 text-destructive";
   return "bg-amber-500/15 text-amber-900 dark:text-amber-200";
+}
+
+function formatEventType(eventType: string): string {
+  return eventType.replace(/^telegram_/, "").replace(/_/g, " ");
+}
+
+function metadataSummary(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata) return null;
+  const parts: string[] = [];
+  if (typeof metadata.expenseTitle === "string") parts.push(metadata.expenseTitle);
+  if (typeof metadata.expenseStatus === "string") parts.push(`status: ${metadata.expenseStatus}`);
+  if (typeof metadata.mode === "string") parts.push(metadata.mode);
+  if (typeof metadata.monthKey === "string") parts.push(metadata.monthKey);
+  if (typeof metadata.reason === "string") parts.push(`reason: ${metadata.reason}`);
+  if (typeof metadata.title === "string" && !metadata.expenseTitle) parts.push(metadata.title);
+  if (typeof metadata.amount === "number") parts.push(`₹${metadata.amount.toLocaleString("en-IN")}`);
+  if (typeof metadata.telegramError === "string") parts.push(metadata.telegramError);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export function NotificationEventsPageClient() {
@@ -25,6 +44,7 @@ export function NotificationEventsPageClient() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const limit = 25;
+  const refetchInterval = useRefetchIntervalMs(12_000);
 
   const filters = useMemo(
     () => ({
@@ -38,7 +58,7 @@ export function NotificationEventsPageClient() {
     [channel, status, eventType, search, page],
   );
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, dataUpdatedAt, isFetching } = useQuery({
     queryKey: queryKeys.notificationEvents(filters),
     queryFn: async () => {
       const p = new URLSearchParams();
@@ -53,15 +73,27 @@ export function NotificationEventsPageClient() {
       if (!r.ok) throw new Error("events");
       return r.json() as Promise<{ rows: NotificationEventRow[]; total: number; page: number; limit: number }>;
     },
+    refetchInterval,
+    refetchIntervalInBackground: true,
   });
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
+  const lastUpdated = dataUpdatedAt ? formatDistanceToNow(dataUpdatedAt, { addSuffix: true }) : null;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Notification events</h2>
-        <p className="text-sm text-muted-foreground">Delivery status for email and Telegram sends.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight">Notification events</h2>
+          <p className="text-sm text-muted-foreground">
+            Live delivery status for email and Telegram. Refreshes every 12 seconds.
+          </p>
+        </div>
+        {lastUpdated ? (
+          <p className="text-xs text-muted-foreground">
+            {isFetching ? "Refreshing…" : `Updated ${lastUpdated}`}
+          </p>
+        ) : null}
       </div>
 
       <Card className="rounded-2xl border shadow-sm">
@@ -95,7 +127,7 @@ export function NotificationEventsPageClient() {
           </div>
           <div className="space-y-1.5 md:w-60">
             <p className="text-xs font-medium text-muted-foreground">Event type</p>
-            <Input className="rounded-xl" value={eventType} onChange={(e) => { setEventType(e.target.value); setPage(1); }} placeholder="invite_email" />
+            <Input className="rounded-xl" value={eventType} onChange={(e) => { setEventType(e.target.value); setPage(1); }} placeholder="expense_pending" />
           </div>
           <div className="space-y-1.5 md:flex-1">
             <p className="text-xs font-medium text-muted-foreground">Search</p>
@@ -113,18 +145,22 @@ export function NotificationEventsPageClient() {
           ) : (
             <>
               <ul className="divide-y">
-                {data?.rows.map((row) => (
-                  <li key={row._id} className="space-y-2 p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary" className={`rounded-lg text-xs ${statusClass(row.status)}`}>{row.status}</Badge>
-                      <Badge variant="outline" className="rounded-lg text-xs">{row.channel}</Badge>
-                      <span className="text-xs text-muted-foreground">{row.eventType}</span>
-                      <span className="ml-auto text-xs tabular-nums text-muted-foreground">{format(new Date(row.createdAt), "MMM d, yyyy · HH:mm")}</span>
-                    </div>
-                    <p className="text-sm">{row.recipient || "No recipient"}</p>
-                    {row.message ? <p className="text-xs text-muted-foreground">{row.message}</p> : null}
-                  </li>
-                ))}
+                {data?.rows.map((row) => {
+                  const context = metadataSummary(row.metadata);
+                  return (
+                    <li key={row._id} className="space-y-2 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className={`rounded-lg text-xs ${statusClass(row.status)}`}>{row.status}</Badge>
+                        <Badge variant="outline" className="rounded-lg text-xs">{row.channel}</Badge>
+                        <span className="text-xs font-medium capitalize">{formatEventType(row.eventType)}</span>
+                        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{format(new Date(row.createdAt), "MMM d, yyyy · HH:mm:ss")}</span>
+                      </div>
+                      {context ? <p className="text-sm font-medium">{context}</p> : null}
+                      <p className="text-sm text-muted-foreground">{row.recipient || "Household Telegram channel"}</p>
+                      {row.message ? <p className="text-xs text-destructive/90">{row.message}</p> : null}
+                    </li>
+                  );
+                })}
               </ul>
               {!data?.rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">No events match your filters.</p> : null}
               <div className="flex items-center justify-between border-t px-4 py-3">

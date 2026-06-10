@@ -303,6 +303,7 @@ export async function getMonthlySummary(monthKey: string): Promise<MonthlySummar
       notes: e.notes,
       description: e.description,
       billImage: e.billImage,
+      billImages: e.billImages,
     }));
 
   const recentExpensesDetailed = recentExpenses.map((row) => ({

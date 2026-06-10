@@ -1,3 +1,4 @@
+import { normalizeBillImages, primaryBillImage } from "@/lib/expense-bills";
 import { connectDb } from "@/lib/db";
 import type { ExpenseCategory } from "@/lib/constants";
 import { isApprovedExpense } from "@/lib/expense-ledger-utils";
@@ -23,6 +24,7 @@ type ExpenseDocShape = {
   notes?: string;
   description?: string;
   billImage?: string;
+  billImages?: string[];
   status?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   currency?: string;
@@ -33,6 +35,7 @@ type ExpenseDocShape = {
 };
 
 function toDTO(e: ExpenseDocShape): ExpenseDTO {
+  const billImages = normalizeBillImages({ billImages: e.billImages, billImage: e.billImage });
   return {
     _id: e._id.toString(),
     title: e.title,
@@ -49,7 +52,8 @@ function toDTO(e: ExpenseDocShape): ExpenseDTO {
     date: e.date.toISOString(),
     notes: e.notes,
     description: e.description,
-    billImage: e.billImage,
+    billImages,
+    billImage: primaryBillImage(billImages),
     status: e.status,
     rejectionReason: e.rejectionReason,
     currency: e.currency,
@@ -128,12 +132,16 @@ export async function getExpenseById(id: string): Promise<ExpenseDTO | null> {
   return toDTO(leanToShape(e));
 }
 
+function resolveInputBillImages(input: {
+  billImages?: string[];
+  billImage?: string;
+}): string[] {
+  return normalizeBillImages({ billImages: input.billImages, billImage: input.billImage });
+}
+
 export async function createExpense(input: CreateExpenseInput): Promise<ExpenseDTO> {
   await connectDb();
-  const bill =
-    typeof input.billImage === "string" && input.billImage.trim().length > 0
-      ? input.billImage.trim()
-      : undefined;
+  const billImages = resolveInputBillImages(input);
 
   const doc = await Expense.create({
     title: input.title,
@@ -154,7 +162,9 @@ export async function createExpense(input: CreateExpenseInput): Promise<ExpenseD
     date: input.date,
     notes: input.notes,
     description: input.description,
-    ...(bill ? { billImage: bill } : {}),
+    ...(billImages.length > 0
+      ? { billImages, billImage: primaryBillImage(billImages) }
+      : {}),
     status: input.status ?? "approved",
     ...(input.currency ? { currency: input.currency } : {}),
     ...(input.originalAmount != null ? { originalAmount: input.originalAmount } : {}),
@@ -277,11 +287,23 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseD
   if (input.originalAmount !== undefined) updates.originalAmount = input.originalAmount;
   if (input.exchangeRate !== undefined) updates.exchangeRate = input.exchangeRate;
 
-  if (input.billImage !== undefined) {
+  if (input.billImages !== undefined) {
+    if (input.billImages === null || input.billImages.length === 0) {
+      unset.billImage = 1;
+      unset.billImages = 1;
+    } else {
+      const billImages = resolveInputBillImages({ billImages: input.billImages });
+      updates.billImages = billImages;
+      updates.billImage = primaryBillImage(billImages);
+    }
+  } else if (input.billImage !== undefined) {
     if (input.billImage === null) {
       unset.billImage = 1;
+      unset.billImages = 1;
     } else {
-      updates.billImage = input.billImage.trim();
+      const billImages = resolveInputBillImages({ billImage: input.billImage });
+      updates.billImages = billImages;
+      updates.billImage = primaryBillImage(billImages);
     }
   }
 

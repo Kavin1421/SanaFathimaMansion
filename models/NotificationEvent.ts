@@ -29,6 +29,7 @@ const notificationEventSchema = new Schema<NotificationEventDocument>(
 notificationEventSchema.index({ channel: 1, createdAt: -1 });
 notificationEventSchema.index({ eventType: 1, createdAt: -1 });
 notificationEventSchema.index({ status: 1, createdAt: -1 });
+notificationEventSchema.index({ "metadata.dedupeKey": 1, createdAt: -1 });
 
 export const NotificationEvent: Model<NotificationEventDocument> =
   mongoose.models.NotificationEvent ??

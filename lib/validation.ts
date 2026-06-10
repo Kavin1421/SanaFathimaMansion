@@ -113,6 +113,50 @@ const billImageUrlSchema = z.preprocess(
     .optional(),
 );
 
+const billImageUrlItemSchema = z
+  .string()
+  .max(2048)
+  .refine(
+    (s) => {
+      try {
+        const u = new URL(s);
+        return u.protocol === "https:" || u.protocol === "http:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "Bill image must be a valid http(s) URL" },
+  );
+
+/** Up to 3 bill/receipt image URLs. */
+const billImagesSchema = z.preprocess(
+  (v) => {
+    if (v === undefined || v === null) return undefined;
+    if (!Array.isArray(v)) return v;
+    return v
+      .filter((item): item is string => typeof item === "string")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .slice(0, 3);
+  },
+  z.array(billImageUrlItemSchema).max(3).optional(),
+);
+
+/** For updates: array of URLs, or `null` to remove all bill images. */
+const billImagesUpdateSchema = z.preprocess(
+  (v) => {
+    if (v === null) return null;
+    if (v === undefined) return undefined;
+    if (!Array.isArray(v)) return v;
+    return v
+      .filter((item): item is string => typeof item === "string")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .slice(0, 3);
+  },
+  z.union([z.array(billImageUrlItemSchema).max(3), z.null()]).optional(),
+);
+
 /** For updates: same URL rules, or `null` to remove a stored image. */
 const billImageUpdateSchema = z.preprocess(
   (v) => {
@@ -156,6 +200,7 @@ const expenseFields = {
   notes: z.string().max(2000).optional(),
   description: z.string().max(2000).optional(),
   billImage: billImageUrlSchema,
+  billImages: billImagesSchema,
   status: z.enum(["pending", "approved", "rejected"]).optional(),
   currency: z.enum(SUPPORTED_CURRENCIES).optional(),
   originalAmount: z.number().positive().optional(),
@@ -229,6 +274,7 @@ export const createExpenseSchema = expenseBaseSchema;
 const expenseUpdateFields = {
   ...expenseFields,
   billImage: billImageUpdateSchema,
+  billImages: billImagesUpdateSchema,
 };
 
 export const updateExpenseSchema = z

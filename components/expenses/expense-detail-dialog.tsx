@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { ExpenseCategory } from "@/lib/constants";
+import { normalizeBillImages } from "@/lib/expense-bills";
 import { formatInr } from "@/lib/utils";
 import type { ExpenseDTO, UserDTO } from "@/types";
 import { roundMoney } from "@/lib/ledger";
@@ -55,6 +56,10 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
       { value: "✅", Icon: Check },
     ],
     [],
+  );
+  const billImages = useMemo(
+    () => normalizeBillImages({ billImages: expense.billImages, billImage: expense.billImage }),
+    [expense.billImages, expense.billImage],
   );
   const comments = useMemo(() => expense.comments ?? [], [expense.comments]);
   const reactions = useMemo(() => expense.reactions ?? [], [expense.reactions]);
@@ -133,10 +138,18 @@ function DetailBody({ expense, users }: { expense: ExpenseDTO; users: UserDTO[] 
           <p className="whitespace-pre-wrap text-muted-foreground">{expense.description ?? expense.notes}</p>
         </div>
       )}
-      {expense.billImage ? (
-        <div className="space-y-2 border-t pt-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bill</p>
-          <BillImagePanel key={expense._id} src={expense.billImage} title={expense.title} />
+      {billImages.length > 0 ? (
+        <div className="space-y-3 border-t pt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Bill{billImages.length > 1 ? `s (${billImages.length})` : ""}
+          </p>
+          {billImages.map((src, index) => (
+            <BillImagePanel
+              key={`${expense._id}-${index}`}
+              src={src}
+              title={`${expense.title} ${billImages.length > 1 ? `#${index + 1}` : ""}`}
+            />
+          ))}
         </div>
       ) : null}
       <div className="space-y-3 border-t pt-4">

@@ -13,6 +13,8 @@ import {
   postRecurring,
   updateRecurringExpense,
 } from "@/services/recurring-expenses";
+import { notifyTelegramExpense } from "@/lib/telegram-notify";
+import { getExpenseById } from "@/services/expenses";
 import type { ActionResult } from "./users";
 
 async function requireUserSession() {
@@ -104,6 +106,10 @@ export async function postRecurringExpenseAction(input: {
       });
     } catch (e) {
       console.error("[audit] recurring posted", e);
+    }
+    const expense = await getExpenseById(result.expenseId);
+    if (expense) {
+      notifyTelegramExpense(expense, "created");
     }
     revalidatePath("/dashboard");
     revalidatePath("/expenses");

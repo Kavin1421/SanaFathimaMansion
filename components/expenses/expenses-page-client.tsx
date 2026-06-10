@@ -256,15 +256,22 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
                           <CategoryIcon category={e.category as ExpenseCategory} className="h-5 w-5 text-muted-foreground" />
                         </div>
                         {e.billImage ? (
-                          <Image
-                            src={e.billImage}
-                            alt=""
-                            width={48}
-                            height={48}
-                            className="h-12 w-12 shrink-0 rounded-lg border object-cover"
-                            sizes="48px"
-                            unoptimized
-                          />
+                          <div className="relative h-12 w-12 shrink-0">
+                            <Image
+                              src={e.billImage}
+                              alt=""
+                              width={48}
+                              height={48}
+                              className="h-12 w-12 rounded-lg border object-cover"
+                              sizes="48px"
+                              unoptimized
+                            />
+                            {(e.billImages?.length ?? 0) > 1 ? (
+                              <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                                {e.billImages!.length}
+                              </span>
+                            ) : null}
+                          </div>
                         ) : null}
                         <div className="min-w-0 flex-1 space-y-1">
                           <p className="font-medium leading-snug">

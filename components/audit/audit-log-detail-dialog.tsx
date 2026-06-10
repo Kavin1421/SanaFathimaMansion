@@ -50,22 +50,33 @@ function PayloadFields({ data, title }: { data: Record<string, unknown> | null; 
     if (typeof data.category === "string") rows.push({ k: "Category", v: data.category });
     if (typeof data.date === "string") rows.push({ k: "Date", v: data.date });
     if (typeof data.notes === "string" && data.notes.trim()) rows.push({ k: "Notes", v: data.notes });
-    if (typeof data.billImage === "string" && data.billImage.trim()) {
-      const url = data.billImage.trim();
+    const billUrls = Array.isArray(data.billImages)
+      ? data.billImages.filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+      : typeof data.billImage === "string" && data.billImage.trim()
+        ? [data.billImage.trim()]
+        : [];
+    if (billUrls.length > 0) {
       rows.push({
-        k: "Bill image",
-        v: isHttpUrl(url) ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary underline underline-offset-2"
-          >
-            Open link
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>
-        ) : (
-          url
+        k: billUrls.length > 1 ? "Bill images" : "Bill image",
+        v: (
+          <span className="flex flex-col gap-1">
+            {billUrls.map((url, i) =>
+              isHttpUrl(url) ? (
+                <a
+                  key={`${url}-${i}`}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary underline underline-offset-2"
+                >
+                  {billUrls.length > 1 ? `Receipt ${i + 1}` : "Open link"}
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </a>
+              ) : (
+                <span key={`${url}-${i}`}>{url}</span>
+              ),
+            )}
+          </span>
         ),
       });
     }

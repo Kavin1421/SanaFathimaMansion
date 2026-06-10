@@ -69,6 +69,7 @@ export type ExpenseDTO = {
   notes?: string;
   description?: string;
   billImage?: string;
+  billImages?: string[];
   status?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   currency?: string;

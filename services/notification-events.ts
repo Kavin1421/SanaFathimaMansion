@@ -73,3 +73,23 @@ export async function listNotificationEvents(params: {
     })),
   };
 }
+
+/** Skip duplicate Telegram/email within a short window (prevents double-send on retries). */
+export async function hasRecentNotificationDuplicate(input: {
+  channel: "email" | "telegram";
+  dedupeKey: string;
+  withinMs?: number;
+}): Promise<boolean> {
+  if (!input.dedupeKey.trim()) return false;
+  await connectDb();
+  const since = new Date(Date.now() - (input.withinMs ?? 120_000));
+  const hit = await NotificationEvent.findOne({
+    channel: input.channel,
+    "metadata.dedupeKey": input.dedupeKey,
+    status: "sent",
+    createdAt: { $gte: since },
+  })
+    .select("_id")
+    .lean();
+  return Boolean(hit);
+}

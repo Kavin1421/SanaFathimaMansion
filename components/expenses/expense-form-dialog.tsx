@@ -18,6 +18,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { MAX_EXPENSE_BILL_IMAGES } from "@/lib/expense-bills";
 import { SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currency";
 import { resolveInrAmount } from "@/lib/expense-preview";
 import { queryKeys } from "@/lib/query-keys";
@@ -79,14 +80,13 @@ function FormFields({
   setNotes,
   description,
   setDescription,
-  billImage,
-  setBillImage,
+  billImages,
   uploading,
   currency,
   setCurrency,
   originalAmount,
   setOriginalAmount,
-  onUploadFile,
+  onUploadFiles,
   onRemoveImage,
 }: {
   title: string;
@@ -118,11 +118,10 @@ function FormFields({
   setNotes: (v: string) => void;
   description: string;
   setDescription: (v: string) => void;
-  billImage: string;
-  setBillImage: (v: string) => void;
+  billImages: string[];
   uploading: boolean;
-  onUploadFile: (file: File | null) => void;
-  onRemoveImage: () => void;
+  onUploadFiles: (files: FileList | null) => void;
+  onRemoveImage: (index: number) => void;
 }) {
   return (
     <div className="grid gap-4 py-2">
@@ -332,22 +331,40 @@ function FormFields({
         />
       </div>
       <div className="space-y-2">
-        <Label>Bill image</Label>
+        <Label>Bill images (up to {MAX_EXPENSE_BILL_IMAGES})</Label>
         <Input
           type="file"
           accept="image/*"
+          multiple
           className="rounded-xl"
-          disabled={uploading}
-          onChange={(e) => onUploadFile(e.target.files?.[0] ?? null)}
+          disabled={uploading || billImages.length >= MAX_EXPENSE_BILL_IMAGES}
+          onChange={(e) => {
+            onUploadFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
-        {billImage ? (
-          <div className="relative mt-2 overflow-hidden rounded-xl border">
-            <div className="relative aspect-video max-h-48 w-full bg-muted">
-              <Image src={billImage} alt="Bill preview" fill className="object-contain" unoptimized />
-            </div>
-            <Button type="button" variant="secondary" size="sm" className="m-2 rounded-lg" onClick={onRemoveImage}>
-              Remove image
-            </Button>
+        <p className="text-xs text-muted-foreground">
+          {billImages.length}/{MAX_EXPENSE_BILL_IMAGES} selected
+          {billImages.length < MAX_EXPENSE_BILL_IMAGES ? " — pick one or more photos" : ""}
+        </p>
+        {billImages.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {billImages.map((src, index) => (
+              <div key={`${src}-${index}`} className="overflow-hidden rounded-xl border">
+                <div className="relative aspect-video max-h-40 w-full bg-muted">
+                  <Image src={src} alt={`Bill ${index + 1}`} fill className="object-contain" unoptimized />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="m-2 rounded-lg"
+                  onClick={() => onRemoveImage(index)}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
           </div>
         ) : null}
       </div>
@@ -386,7 +403,7 @@ export function ExpenseFormDialog({
   const [dateStr, setDateStr] = useState("");
   const [notes, setNotes] = useState("");
   const [description, setDescription] = useState("");
-  const [billImage, setBillImage] = useState("");
+  const [billImages, setBillImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
   function setCustomAmount(userId: string, value: string) {
@@ -429,7 +446,13 @@ export function ExpenseFormDialog({
       setDateStr(expense.date.slice(0, 10));
       setNotes(expense.notes ?? "");
       setDescription(expense.description ?? (expense.category === "Others" ? expense.notes ?? "" : ""));
-      setBillImage(expense.billImage ?? "");
+      setBillImages(
+        expense.billImages?.length
+          ? expense.billImages
+          : expense.billImage
+            ? [expense.billImage]
+            : [],
+      );
       setCurrency((expense.currency as SupportedCurrency) ?? "INR");
       setOriginalAmount(expense.originalAmount != null ? String(expense.originalAmount) : "");
     } else if (users.length) {
@@ -458,7 +481,7 @@ export function ExpenseFormDialog({
                 preBillSeed.title
             : "",
         );
-        setBillImage("");
+        setBillImages([]);
         setCurrency("INR");
         setOriginalAmount("");
       } else {
@@ -475,7 +498,7 @@ export function ExpenseFormDialog({
         setDateStr(new Date().toISOString().slice(0, 10));
         setNotes("");
         setDescription("");
-        setBillImage("");
+        setBillImages([]);
       }
     }
   }, [expense, open, users, preBillSeed, defaultPaidById]);
@@ -607,7 +630,6 @@ export function ExpenseFormDialog({
           amount: Number(customAmounts[userId] ?? 0),
         }));
       }
-      const trimmedBill = billImage.trim();
       const base = {
         title: title.trim(),
         amount: amt,
@@ -622,15 +644,15 @@ export function ExpenseFormDialog({
         description: description.trim() || undefined,
         ...(currency !== "INR" ? { currency, originalAmount: Number(originalAmount) } : {}),
       };
+      const billImagesPayload = billImages.length > 0 ? billImages : null;
       if (expense) {
-        const billImagePayload = trimmedBill.length > 0 ? trimmedBill : null;
-        const r = await updateExpenseAction({ id: expense._id, ...base, billImage: billImagePayload });
+        const r = await updateExpenseAction({ id: expense._id, ...base, billImages: billImagesPayload });
         if (!r.ok) throw new Error(r.error);
         return r.data;
       }
       const createPayload = {
         ...base,
-        ...(trimmedBill.length > 0 ? { billImage: trimmedBill } : {}),
+        ...(billImages.length > 0 ? { billImages } : {}),
       };
       const r = await createExpenseAction(createPayload);
       if (!r.ok) throw new Error(r.error);
@@ -673,17 +695,30 @@ export function ExpenseFormDialog({
     onError: (e: Error) => showUserError(e, "expense"),
   });
 
-  async function onUploadFile(file: File | null) {
-    if (!file) return;
+  async function onUploadFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const remaining = MAX_EXPENSE_BILL_IMAGES - billImages.length;
+    if (remaining <= 0) {
+      toast.error(`Maximum ${MAX_EXPENSE_BILL_IMAGES} bill images allowed`);
+      return;
+    }
+    const toUpload = Array.from(files).slice(0, remaining);
+    if (toUpload.length < files.length) {
+      toast.message(`Only ${remaining} more image${remaining === 1 ? "" : "s"} can be added`);
+    }
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      setBillImage(data.url as string);
-      toast.success("Image uploaded");
+      const urls: string[] = [];
+      for (const file of toUpload) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Upload failed");
+        urls.push(data.url as string);
+      }
+      setBillImages((prev) => [...prev, ...urls].slice(0, MAX_EXPENSE_BILL_IMAGES));
+      toast.success(urls.length === 1 ? "Image uploaded" : `${urls.length} images uploaded`);
     } catch (e) {
       showUserError(e, "upload");
     } finally {
@@ -721,11 +756,10 @@ export function ExpenseFormDialog({
     setNotes,
     description,
     setDescription,
-    billImage,
-    setBillImage,
+    billImages,
     uploading,
-    onUploadFile,
-    onRemoveImage: () => setBillImage(""),
+    onUploadFiles,
+    onRemoveImage: (index: number) => setBillImages((prev) => prev.filter((_, i) => i !== index)),
   };
 
   const footer = (

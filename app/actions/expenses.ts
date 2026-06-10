@@ -12,7 +12,7 @@ import {
   type CreateExpenseInput,
   type UpdateExpenseInput,
 } from "@/lib/validation";
-import { notifyTelegramExpense } from "@/lib/telegram-notify";
+import { notifyTelegramExpense, notifyTelegramExpenseRejected } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import {
   addExpenseComment,
@@ -75,7 +75,7 @@ export async function createExpenseAction(
     } catch (e) {
       console.error("[audit] create expense", e);
     }
-    notifyTelegramExpense(data, "created");
+    notifyTelegramExpense(data, data.status === "pending" ? "pending" : "created");
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -149,7 +149,11 @@ export async function updateExpenseAction(
     } catch (e) {
       console.error("[audit] update expense", e);
     }
-    notifyTelegramExpense(data, "updated");
+    if (data.status === "pending") {
+      notifyTelegramExpense(data, "pending");
+    } else if (data.status === "approved") {
+      notifyTelegramExpense(data, "updated");
+    }
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -312,7 +316,7 @@ export async function approveExpenseAction(
     } catch (e) {
       console.error("[audit] approve expense", e);
     }
-    notifyTelegramExpense(data, "updated");
+    notifyTelegramExpense(data, "approved", { approvedByName: session.user.name ?? undefined });
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -348,6 +352,7 @@ export async function rejectExpenseAction(
     } catch (e) {
       console.error("[audit] reject expense", e);
     }
+    notifyTelegramExpenseRejected(data, parsed.data.reason, session.user.name ?? undefined);
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");

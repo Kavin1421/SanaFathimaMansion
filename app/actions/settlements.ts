@@ -87,6 +87,7 @@ export async function settleAction(
       console.error("[audit] create settlement", e);
     }
     notifyTelegramSettlementRecorded(
+      data._id,
       parsed.data.fromUser,
       parsed.data.toUser,
       parsed.data.amount,

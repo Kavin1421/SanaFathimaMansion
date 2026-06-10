@@ -30,6 +30,7 @@ export type ExpenseDocument = {
   notes?: string;
   description?: string;
   billImage?: string;
+  billImages?: string[];
   status?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   currency?: string;
@@ -78,6 +79,7 @@ const expenseSchema = new Schema<ExpenseDocument>(
     notes: { type: String },
     description: { type: String },
     billImage: { type: String },
+    billImages: { type: [String], default: undefined },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
     rejectionReason: { type: String },
     currency: { type: String, default: "INR" },

@@ -2,15 +2,19 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
+import { isSecureAuthCookies, SESSION_MAX_AGE_SEC } from "@/lib/auth-env";
 import { connectDb } from "@/lib/db";
 import { Account } from "@/models/Account";
 import { User } from "@/models/User";
 import { superAdminEmail } from "@/lib/super-admin";
 
+const JWT_DB_REFRESH_MS = 5 * 60 * 1000;
+
 const googleConfigured =
   Boolean(process.env.GOOGLE_CLIENT_ID?.length) && Boolean(process.env.GOOGLE_CLIENT_SECRET?.length);
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -47,8 +51,24 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60,
+    maxAge: SESSION_MAX_AGE_SEC,
+    updateAge: 24 * 60 * 60,
   },
+  cookies: {
+    sessionToken: {
+      name: isSecureAuthCookies()
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: isSecureAuthCookies(),
+        maxAge: SESSION_MAX_AGE_SEC,
+      },
+    },
+  },
+  useSecureCookies: isSecureAuthCookies(),
   pages: {
     signIn: "/login",
   },
@@ -63,6 +83,7 @@ export const authOptions: NextAuthOptions = {
 
       if (user && account?.provider === "credentials") {
         token.id = user.id;
+        token.sub = user.id;
         token.name = user.name ?? token.name;
         token.picture = user.image ?? undefined;
         token.onboardingCompleted = Boolean(
@@ -96,6 +117,7 @@ export const authOptions: NextAuthOptions = {
           await acc.save();
         }
         token.id = acc._id.toString();
+        token.sub = acc._id.toString();
         token.name = acc.name;
         token.picture = acc.image ?? undefined;
         token.onboardingCompleted = acc.onboardingCompleted;
@@ -105,22 +127,30 @@ export const authOptions: NextAuthOptions = {
         token.isSuperAdmin = token.email === superAdminEmail();
       }
 
-      // Only refresh from DB on subsequent JWT updates (no `user`); on sign-in we
-      // already have fresh fields from authorize / Google branch above.
+      // Refresh profile from DB periodically — never throw (DB blips must not log users out).
       if (token.id && !user) {
-        await connectDb();
-        const acc = await Account.findById(token.id)
-          .select("onboardingCompleted role ledgerUserId email name image")
-          .lean();
-        if (acc) {
-          token.onboardingCompleted = Boolean(acc.onboardingCompleted);
-          token.role = acc.role ?? "user";
-          token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
-          token.name = acc.name;
-          token.picture = acc.image ?? undefined;
-          if (acc.email) {
-            token.email = acc.email.toLowerCase().trim();
-            token.isSuperAdmin = token.email === superAdminEmail();
+        const lastRefresh = (token.dbRefreshedAt as number | undefined) ?? 0;
+        const now = Date.now();
+        if (now - lastRefresh >= JWT_DB_REFRESH_MS) {
+          try {
+            await connectDb();
+            const acc = await Account.findById(token.id)
+              .select("onboardingCompleted role ledgerUserId email name image")
+              .lean();
+            if (acc) {
+              token.onboardingCompleted = Boolean(acc.onboardingCompleted);
+              token.role = acc.role ?? "user";
+              token.ledgerUserId = acc.ledgerUserId?.toString() ?? null;
+              token.name = acc.name;
+              token.picture = acc.image ?? undefined;
+              if (acc.email) {
+                token.email = acc.email.toLowerCase().trim();
+                token.isSuperAdmin = token.email === superAdminEmail();
+              }
+            }
+            token.dbRefreshedAt = now;
+          } catch (e) {
+            console.error("[auth] jwt db refresh failed — keeping existing session", e);
           }
         }
       }
