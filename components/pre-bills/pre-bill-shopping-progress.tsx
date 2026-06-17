@@ -1,10 +1,11 @@
 "use client";
 
+import { LottiePlayer } from "@/components/lottie/lottie-player";
+import { getLottieScene } from "@/lib/lottie-catalog";
 import { Label } from "@/components/ui/label";
 import { preBillShoppingStats } from "@/lib/pre-bill-utils";
 import type { PreBillItemDTO } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
-import { PartyPopper } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
@@ -24,6 +25,7 @@ export function PreBillShoppingProgress({
 }) {
   const { total, purchased, allPurchased } = useMemo(() => preBillShoppingStats(items), [items]);
   const pct = total > 0 ? Math.round((purchased / total) * 100) : 0;
+  const doneScene = getLottieScene("shoppingDone");
 
   return (
     <div className="space-y-4">
@@ -70,7 +72,16 @@ export function PreBillShoppingProgress({
             transition={{ type: "spring", stiffness: 420, damping: 28 }}
             className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100"
           >
-            <PartyPopper className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <LottiePlayer
+              src={doneScene.src}
+              width={doneScene.w}
+              height={doneScene.h}
+              loop={doneScene.loop}
+              speed={doneScene.speed}
+              fallbackIcon={doneScene.fallback}
+              playOnVisible={false}
+              ariaLabel="All items purchased"
+            />
             <p className="text-sm font-medium">
               <span className="mr-1.5" aria-hidden>
                 🎉

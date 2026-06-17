@@ -1,8 +1,12 @@
 "use client";
 
+import { LottiePlayer } from "@/components/lottie/lottie-player";
+import { getLottieScene } from "@/lib/lottie-catalog";
 import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
+
+const walletScene = getLottieScene("homeWallet");
 
 export function AuthLayout({
   children,
@@ -43,6 +47,18 @@ export function AuthLayout({
           </p>
           <footer className="mt-3 text-sm text-primary-foreground/70">Household wisdom</footer>
         </blockquote>
+        <div className="mt-8 flex justify-center opacity-90 lg:justify-start">
+          <LottiePlayer
+            src={walletScene.src}
+            width={walletScene.w}
+            height={walletScene.h}
+            loop={walletScene.loop}
+            speed={walletScene.speed}
+            fallbackIcon={walletScene.fallback}
+            className="bg-primary-foreground/10"
+            aria-hidden
+          />
+        </div>
       </motion.aside>
       <div className="flex flex-1 items-center justify-center py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] lg:px-12">
         <motion.div

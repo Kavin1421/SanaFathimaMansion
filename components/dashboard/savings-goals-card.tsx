@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { contributeSavingsGoalAction, createSavingsGoalAction } from "@/app/actions/savings-goals";
 import { AmountSummaryDialog } from "@/components/ui/amount-summary-dialog";
 import { Button } from "@/components/ui/button";
@@ -106,7 +107,12 @@ export function SavingsGoalsCard() {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : activeGoals.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No active savings goals yet.</p>
+          <PremiumEmptyState
+            scene="emptyInbox"
+            title="No savings goals yet"
+            description="Create a household side pot to track together."
+            compact
+          />
         ) : (
           <ul className="space-y-4">
             {activeGoals.map((goal) => (

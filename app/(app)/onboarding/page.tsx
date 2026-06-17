@@ -1,13 +1,17 @@
 "use client";
 
 import { createUserAction } from "@/app/actions/users";
+import { LottiePlayer } from "@/components/lottie/lottie-player";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getLottieScene } from "@/lib/lottie-catalog";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+const SUCCESS_NAV_DELAY_MS = 1800;
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -17,6 +21,8 @@ export default function OnboardingPage() {
   const [members, setMembers] = useState<{ name: string; email: string }[]>([{ name: "", email: "" }]);
   const [loadingHouse, setLoadingHouse] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const successScene = getLottieScene("successCheck");
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -42,6 +48,15 @@ export default function OnboardingPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!showSuccess) return;
+    const t = window.setTimeout(() => {
+      router.push("/dashboard");
+      router.refresh();
+    }, SUCCESS_NAV_DELAY_MS);
+    return () => window.clearTimeout(t);
+  }, [showSuccess, router]);
 
   async function saveHouseAndContinue() {
     const name = houseName.trim();
@@ -102,8 +117,7 @@ export default function OnboardingPage() {
       }
       await update?.();
       toast.success("You’re all set!");
-      router.push("/dashboard");
-      router.refresh();
+      setShowSuccess(true);
     } finally {
       setSaving(false);
     }
@@ -119,8 +133,7 @@ export default function OnboardingPage() {
       }
       await update?.();
       toast.success("Onboarding completed. You can invite roommates later.");
-      router.push("/dashboard");
-      router.refresh();
+      setShowSuccess(true);
     } finally {
       setSaving(false);
     }
@@ -135,8 +148,29 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg py-4 md:py-8">
-      <div className="mb-8 flex gap-2">
+    <>
+      {showSuccess ? (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 px-6 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <LottiePlayer
+            src={successScene.src}
+            width={successScene.w}
+            height={successScene.h}
+            loop={successScene.loop}
+            speed={successScene.speed}
+            fallbackIcon={successScene.fallback}
+            playOnVisible={false}
+            ariaLabel="Onboarding complete"
+          />
+          <p className="mt-4 text-lg font-semibold">You&apos;re all set!</p>
+          <p className="mt-1 text-sm text-muted-foreground">Taking you to your dashboard…</p>
+        </div>
+      ) : null}
+      <div className="mx-auto max-w-lg py-4 md:py-8">
+        <div className="mb-8 flex gap-2">
         <div
           className={`h-1 flex-1 rounded-full ${step >= 1 ? "bg-primary" : "bg-muted"}`}
           aria-hidden
@@ -145,9 +179,9 @@ export default function OnboardingPage() {
           className={`h-1 flex-1 rounded-full ${step >= 2 ? "bg-primary" : "bg-muted"}`}
           aria-hidden
         />
-      </div>
+        </div>
 
-      {step === 1 ? (
+        {step === 1 ? (
         <div className="rounded-2xl border bg-card p-6 shadow-sm md:p-8">
           <h2 className="text-2xl font-bold tracking-tight">Name your household</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -223,6 +257,7 @@ export default function OnboardingPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

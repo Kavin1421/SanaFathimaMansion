@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { deleteExpenseAction } from "@/app/actions/expenses";
 import { ExpenseDetailDialog } from "@/components/expenses/expense-detail-dialog";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
@@ -237,7 +238,11 @@ export function ExpensesPageClient({ monthKey }: { monthKey: string }) {
               ))}
             </div>
           ) : !expenses?.length ? (
-            <p className="p-8 text-center text-sm text-muted-foreground">No expenses match.</p>
+            <PremiumEmptyState
+              scene="emptyInbox"
+              title="No expenses match"
+              description="Try adjusting your filters or add a new expense."
+            />
           ) : (
             <ul className="divide-y">
               {expenses.map((e) => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { sendSettlementNudgeAction } from "@/app/actions/settlements";
 import { SettlementConfirmDialog } from "@/components/settlements/settlement-confirm-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -92,7 +93,12 @@ export function OwesList({ summary, monthKey }: { summary: MonthlySummary; month
       </div>
 
       {suggestions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Everyone is square. Nothing to settle.</p>
+        <PremiumEmptyState
+          scene="allCaughtUp"
+          title="Everyone is square"
+          description="Nothing to settle right now."
+          compact
+        />
       ) : (
         <ul className="divide-y divide-slate-200/80 dark:divide-slate-800/80">
           {suggestions.map((x, i) => (

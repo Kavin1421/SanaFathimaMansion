@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { queryKeys } from "@/lib/query-keys";
 import { formatInr } from "@/lib/utils";
 import type { WalletAmendmentDTO } from "@/types";
@@ -43,7 +44,12 @@ export function WalletFundingHistory({ monthKey }: { monthKey: string }) {
           {isLoading ? (
             <p className="py-3 text-sm text-muted-foreground">Loading…</p>
           ) : rows.length === 0 ? (
-            <p className="py-3 text-sm text-muted-foreground">No wallet top-ups this month.</p>
+            <PremiumEmptyState
+              scene="emptyChart"
+              title="No wallet top-ups"
+              description="Funding additions for this month appear here."
+              compact
+            />
           ) : (
             <ul className="divide-y">
               {rows.map((row) => (

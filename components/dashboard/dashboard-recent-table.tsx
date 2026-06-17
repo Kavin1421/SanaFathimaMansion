@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { Badge } from "@/components/ui/badge";
 import { CategoryIcon } from "@/components/icons/category-icon";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,7 +10,12 @@ import type { RecentExpenseRow } from "@/types";
 export function DashboardRecentTable({ rows }: { rows: RecentExpenseRow[] }) {
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">No expenses recorded this month yet.</p>
+      <PremiumEmptyState
+        scene="emptyInbox"
+        title="No expenses this month"
+        description="Your latest household spend will show up here."
+        compact
+      />
     );
   }
 

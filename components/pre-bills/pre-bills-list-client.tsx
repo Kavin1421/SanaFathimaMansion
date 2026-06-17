@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import {
   deletePreBillAction,
   duplicatePreBillAction,
@@ -278,20 +279,24 @@ export function PreBillsListClient({
             <span>Loading pre-bills…</span>
           </div>
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-6 py-16 text-center shadow-inner">
-            <p className="text-lg font-medium text-foreground">Start planning your shopping 🛒</p>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-              Create a draft list, share items with your household, then finalize when you are ready to
-              shop.
-            </p>
-            <Button asChild className="mt-8 h-11 rounded-xl shadow-md transition hover:scale-[1.02]">
-              <Link href="/pre-bills/new">Create your first Pre-Bill</Link>
-            </Button>
+          <div className="rounded-2xl border border-dashed bg-muted/20 px-6 shadow-inner">
+            <PremiumEmptyState
+              scene="emptyInbox"
+              title="Start planning your shopping"
+              description="Create a draft list, share items with your household, then finalize when you are ready to shop."
+            >
+              <Button asChild className="mt-2 h-11 rounded-xl shadow-md transition hover:scale-[1.02]">
+                <Link href="/pre-bills/new">Create your first Pre-Bill</Link>
+              </Button>
+            </PremiumEmptyState>
           </div>
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No pre-bills match your filters. Try adjusting search or filters.
-          </p>
+          <PremiumEmptyState
+            scene="emptyInbox"
+            title="No pre-bills match"
+            description="Try adjusting search or filters."
+            compact
+          />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((b) => {

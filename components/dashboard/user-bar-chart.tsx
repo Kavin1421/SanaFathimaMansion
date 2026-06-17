@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { formatInr } from "@/lib/utils";
 import {
   Bar,
@@ -16,8 +17,13 @@ type Row = { name: string; paid: number };
 export function UserBarChart({ data }: { data: Row[] }) {
   if (!data.some((d) => d.paid > 0)) {
     return (
-      <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-200/80 text-sm text-muted-foreground dark:border-slate-800">
-        No payments recorded this month
+      <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-200/80 dark:border-slate-800">
+        <PremiumEmptyState
+          scene="emptyChart"
+          title="No payments recorded"
+          description="Who paid what will show here this month."
+          compact
+        />
       </div>
     );
   }

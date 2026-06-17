@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import {
   confirmSettlementAction,
   sendSettlementNudgeAction,
@@ -137,7 +138,12 @@ export function SettlementRoomPageClient() {
         <p className="mt-1 text-sm text-muted-foreground">Mark paid or propose a split adjustment.</p>
         <div className="mt-4 space-y-3">
           {suggestions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No pending suggestions right now.</p>
+            <PremiumEmptyState
+              scene="allCaughtUp"
+              title="All caught up"
+              description="No pending settlement suggestions right now."
+              compact
+            />
           ) : (
             suggestions.map((s, i) => (
               <div key={`${s.fromUserId}-${s.toUserId}-${i}`} className="rounded-xl border p-3">
@@ -179,7 +185,12 @@ export function SettlementRoomPageClient() {
         <p className="mt-1 text-sm text-muted-foreground">Proposed {"->"} Paid {"->"} Confirmed</p>
         <div className="mt-4 space-y-3">
           {recentSettlements.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No settlement activity yet.</p>
+            <PremiumEmptyState
+              scene="emptyInbox"
+              title="No settlement activity"
+              description="Completed and proposed settlements appear here."
+              compact
+            />
           ) : (
             recentSettlements.map((s) => (
               <div key={s._id} className="rounded-xl border p-3">

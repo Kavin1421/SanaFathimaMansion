@@ -3,6 +3,7 @@
 import { linkPreBillExpenseAction } from "@/app/actions/pre-bills";
 import { ExpenseImpactPreview } from "@/components/expenses/expense-impact-preview";
 import { CategoryIcon } from "@/components/icons/category-icon";
+import { LottieSuccessMoment } from "@/components/lottie/lottie-success-moment";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -67,6 +68,7 @@ export function PreBillExpenseWizard({
   const [splitMode, setSplitMode] = useState<"equal" | "custom">("equal");
   const [splitIds, setSplitIds] = useState<Set<string>>(new Set());
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [addedExpense, setAddedExpense] = useState<ExpenseDTO | null>(null);
 
   const userNames = useMemo(
     () => Object.fromEntries(users.map((u) => [u._id, u.name])),
@@ -133,13 +135,13 @@ export function PreBillExpenseWizard({
       return r.data;
     },
     onSuccess: (data: ExpenseDTO) => {
-      toast.success("Expense created and linked to pre-bill");
       qc.invalidateQueries({ queryKey: ["preBill", preBill._id] });
       qc.invalidateQueries({ queryKey: queryKeys.preBills() });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
       qc.invalidateQueries({ queryKey: ["expenses"] });
       setPreviewOpen(false);
       onOpenChange(false);
+      setAddedExpense(data);
       onLinked?.();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -285,6 +287,15 @@ export function PreBillExpenseWizard({
         title="Confirm pre-bill expense"
         busy={createMut.isPending}
         onConfirm={() => createMut.mutate()}
+      />
+
+      <LottieSuccessMoment
+        open={!!addedExpense}
+        onClose={() => setAddedExpense(null)}
+        scene="expenseAdded"
+        title="Expense recorded"
+        amount={addedExpense ? formatInr(addedExpense.amount) : undefined}
+        subtitle={addedExpense?.title}
       />
     </>
   );

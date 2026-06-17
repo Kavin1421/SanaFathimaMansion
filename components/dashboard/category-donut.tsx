@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import type { ExpenseCategory } from "@/lib/constants";
 import { formatInr } from "@/lib/utils";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
@@ -17,8 +18,13 @@ export function CategoryDonut({ data }: Props) {
 
   if (chart.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center rounded-xl border border-dashed border-slate-200/80 text-sm text-muted-foreground dark:border-slate-800">
-        No spending this month
+      <div className="flex h-[300px] items-center justify-center rounded-xl border border-dashed border-slate-200/80 dark:border-slate-800">
+        <PremiumEmptyState
+          scene="emptyChart"
+          title="No spending this month"
+          description="Expenses will appear here once recorded."
+          compact
+        />
       </div>
     );
   }

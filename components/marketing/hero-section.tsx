@@ -1,6 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { LottiePlayer } from "@/components/lottie/lottie-player";
+import { getLottieScene } from "@/lib/lottie-catalog";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -57,6 +59,8 @@ const ctaPrimaryClass =
 
 const ctaSecondaryClass =
   "rounded-2xl border border-white/30 bg-white/55 px-8 text-base font-semibold shadow-[0_10px_40px_rgba(0,0,0,0.06)] backdrop-blur-md transition-all duration-300 hover:border-indigo-400/40 hover:bg-white/75 hover:shadow-[0_14px_48px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:hover:bg-slate-900/60 h-12 md:h-14";
+
+const walletScene = getLottieScene("homeWallet");
 
 export function HeroSection() {
   const reduceMotion = useReducedMotion();
@@ -122,6 +126,22 @@ export function HeroSection() {
                 <a href="#how-it-works">See how it works</a>
               </Button>
             </motion.div>
+          </motion.div>
+          <motion.div
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.18 }}
+            className="mt-6 flex justify-start"
+          >
+            <LottiePlayer
+              src={walletScene.src}
+              width={walletScene.w - 40}
+              height={walletScene.h - 40}
+              loop={walletScene.loop}
+              speed={walletScene.speed}
+              fallbackIcon={walletScene.fallback}
+              aria-hidden
+            />
           </motion.div>
           <motion.p
             initial={reduceMotion ? false : { opacity: 0 }}

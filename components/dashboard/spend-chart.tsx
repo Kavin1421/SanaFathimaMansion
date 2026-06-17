@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { formatInr } from "@/lib/utils";
 import type { DailySpendPoint } from "@/types";
 import { format, parseISO } from "date-fns";
@@ -55,8 +56,13 @@ export function SpendChart({ data }: { data: DailySpendPoint[] }) {
 
   if (chart.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center rounded-xl border border-dashed border-slate-200/80 text-sm text-muted-foreground dark:border-slate-800">
-        No data for this month
+      <div className="flex h-[300px] items-center justify-center rounded-xl border border-dashed border-slate-200/80 dark:border-slate-800">
+        <PremiumEmptyState
+          scene="emptyChart"
+          title="No spend data yet"
+          description="Daily trends show up after your first expense."
+          compact
+        />
       </div>
     );
   }

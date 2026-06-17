@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { approveExpenseAction, rejectExpenseAction } from "@/app/actions/expenses";
 import { CategoryIcon } from "@/components/icons/category-icon";
 import { ExpenseImpactPreview } from "@/components/expenses/expense-impact-preview";
@@ -130,7 +131,12 @@ export function ExpenseApprovalQueue({
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading queue…</p>
         ) : pending.length === 0 ? (
-          <p className="text-sm text-muted-foreground">All caught up — nothing to approve.</p>
+          <PremiumEmptyState
+            scene="allCaughtUp"
+            title="All caught up"
+            description="Nothing waiting for your approval."
+            compact
+          />
         ) : (
           <ul className="divide-y rounded-xl border">
             {pending.map((expense) => (

@@ -1,5 +1,6 @@
 "use client";
 
+import { PremiumEmptyState } from "@/components/lottie/premium-empty-state";
 import { queryKeys } from "@/lib/query-keys";
 import { formatInr } from "@/lib/utils";
 import type { ActivityItem } from "@/services/activity";
@@ -51,7 +52,12 @@ export function ActivityFeed() {
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading activity…</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No recent activity yet.</p>
+        <PremiumEmptyState
+          scene="activityQuiet"
+          title="No recent activity"
+          description="Expenses, settlements, and pre-bills will appear here."
+          compact
+        />
       ) : (
         <ul className="divide-y rounded-xl border">
           {items.map((item) => {

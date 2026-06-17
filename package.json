@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
     "migrate:expenses-split": "tsx scripts/migrate-expenses-split.ts",
-    "db:clean:dev": "tsx scripts/clean-db-dev.ts"
+    "db:clean:dev": "tsx scripts/clean-db-dev.ts",
+    "lottie:fetch": "node scripts/fetch-lottie-assets.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -36,6 +37,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.38.0",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.469.0",
     "mongoose": "^8.9.3",
     "next": "14.2.18",

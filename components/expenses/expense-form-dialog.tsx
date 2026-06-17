@@ -3,6 +3,7 @@
 import { createExpenseAction, undoExpenseAction, updateExpenseAction } from "@/app/actions/expenses";
 import { ExpenseImpactPreview } from "@/components/expenses/expense-impact-preview";
 import { CategoryIcon } from "@/components/icons/category-icon";
+import { LottieSuccessMoment } from "@/components/lottie/lottie-success-moment";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -405,6 +406,7 @@ export function ExpenseFormDialog({
   const [description, setDescription] = useState("");
   const [billImages, setBillImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [addedExpense, setAddedExpense] = useState<ExpenseDTO | null>(null);
 
   function setCustomAmount(userId: string, value: string) {
     setCustomAmounts((prev) => ({ ...prev, [userId]: value }));
@@ -662,35 +664,17 @@ export function ExpenseFormDialog({
       setPreviewOpen(false);
       if (expense) {
         toast.success("Expense updated");
+        onOpenChange(false);
+      } else if (data) {
+        onOpenChange(false);
+        setAddedExpense(data);
+        if (onCreated) onCreated(data);
       } else {
-        toast.success("Expense added", {
-          duration: 5 * 60 * 1000,
-          action: data
-            ? {
-                label: "Undo",
-                onClick: () => {
-                  void undoExpenseAction(data._id).then((r) => {
-                    if (r.ok) {
-                      toast.success("Expense undone");
-                      qc.invalidateQueries({ queryKey: ["expenses"] });
-                      qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
-                      qc.invalidateQueries({ queryKey: ["activity"] });
-                    } else {
-                      showUserError(r.error, "expense");
-                    }
-                  });
-                },
-              }
-            : undefined,
-        });
+        onOpenChange(false);
       }
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
       qc.invalidateQueries({ queryKey: ["activity"] });
-      if (!expense && data && onCreated) {
-        onCreated(data);
-      }
-      onOpenChange(false);
     },
     onError: (e: Error) => showUserError(e, "expense"),
   });
@@ -799,6 +783,36 @@ export function ExpenseFormDialog({
     />
   );
 
+  const successMoment = (
+    <LottieSuccessMoment
+      open={!!addedExpense}
+      onClose={() => setAddedExpense(null)}
+      scene="expenseAdded"
+      title="Expense recorded"
+      amount={addedExpense ? formatInr(addedExpense.amount) : undefined}
+      subtitle={addedExpense?.title}
+      action={
+        addedExpense
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void undoExpenseAction(addedExpense._id).then((r) => {
+                  if (r.ok) {
+                    toast.success("Expense undone");
+                    qc.invalidateQueries({ queryKey: ["expenses"] });
+                    qc.invalidateQueries({ queryKey: queryKeys.dashboard(monthKey) });
+                    qc.invalidateQueries({ queryKey: ["activity"] });
+                  } else {
+                    showUserError(r.error, "expense");
+                  }
+                });
+              },
+            }
+          : undefined
+      }
+    />
+  );
+
   if (desktop) {
     return (
       <>
@@ -812,6 +826,7 @@ export function ExpenseFormDialog({
           </DialogContent>
         </Dialog>
         {previewDialog}
+        {successMoment}
       </>
     );
   }
@@ -830,6 +845,7 @@ export function ExpenseFormDialog({
         </SheetContent>
       </Sheet>
       {previewDialog}
+      {successMoment}
     </>
   );
 }
