@@ -29,7 +29,6 @@ function isProtectedApi(path: string) {
     path.startsWith("/api/expenses") ||
     path.startsWith("/api/settlements") ||
     path.startsWith("/api/users") ||
-    path.startsWith("/api/upload") ||
     path.startsWith("/api/report") ||
     path.startsWith("/api/activity") ||
     path.startsWith("/api/house") ||
@@ -124,8 +123,8 @@ export const config = {
     "/api/settlements/:path*",
     "/api/users",
     "/api/users/:path*",
-    "/api/upload",
-    "/api/upload/:path*",
+    // /api/upload is intentionally excluded — middleware can corrupt multipart
+    // bodies (esp. phone photos >16KB). Auth is enforced in the route handler.
     "/api/report",
     "/api/report/:path*",
     "/api/activity",

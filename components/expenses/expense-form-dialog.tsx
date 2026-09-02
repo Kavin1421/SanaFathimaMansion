@@ -695,7 +695,7 @@ export function ExpenseFormDialog({
       const urls: string[] = [];
       for (const file of toUpload) {
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", file, file.name || "bill.jpg");
         const res = await fetch("/api/upload", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Upload failed");
