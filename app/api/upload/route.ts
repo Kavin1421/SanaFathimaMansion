@@ -130,7 +130,8 @@ export async function POST(req: Request) {
       try {
         const json = JSON.parse(body.toString("utf8")) as { dataUrl?: string; file?: string };
         const dataUrl = json.dataUrl ?? json.file;
-        const match = typeof dataUrl === "string" ? /^data:([^;]+);base64,(.+)$/s.exec(dataUrl) : null;
+        const match =
+          typeof dataUrl === "string" ? /^data:([^;]+);base64,([\s\S]+)$/.exec(dataUrl) : null;
         if (match) {
           file = {
             buffer: Buffer.from(match[2], "base64"),
