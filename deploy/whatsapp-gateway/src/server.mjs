@@ -10,6 +10,7 @@ import makeWASocket, {
 import pino from "pino";
 import QRCode from "qrcode";
 import qrcodeTerminal from "qrcode-terminal";
+import sharp from "sharp";
 
 const PORT = Number(process.env.PORT || 3020);
 const TOKEN = process.env.WHATSAPP_GATEWAY_TOKEN?.trim() || "";
@@ -184,15 +185,34 @@ function sniffImageMime(buffer) {
   return null;
 }
 
+async function asWhatsAppJpeg(buffer) {
+  const jpeg = await sharp(buffer, { failOn: "none", pages: 1 })
+    .rotate()
+    .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 82 })
+    .toBuffer();
+  if (!jpeg.length || sniffImageMime(jpeg) !== "image/jpeg") {
+    throw new Error("jpeg convert failed");
+  }
+  return jpeg;
+}
+
 async function downloadImage(url) {
   const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(20_000) });
   if (!res.ok) throw new Error(`image ${res.status}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) throw new Error("image size");
   const header = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-  const mime = header.startsWith("image/") ? header : sniffImageMime(buffer);
-  if (!mime) throw new Error("not an image");
-  return { buffer, mime };
+  const sniffed = sniffImageMime(buffer);
+  const mime = header.startsWith("image/") ? header : sniffed;
+  if (!mime && !sniffed) throw new Error("not an image");
+  try {
+    return { buffer: await asWhatsAppJpeg(buffer), mime: "image/jpeg" };
+  } catch (error) {
+    console.error("[whatsapp] jpeg", error instanceof Error ? error.message : error);
+    if (sniffed === "image/jpeg" || sniffed === "image/png") return { buffer, mime: sniffed };
+    throw error;
+  }
 }
 
 async function loadImages(urls) {
@@ -510,6 +530,7 @@ async function main() {
   sendLoop().catch((err) => console.error("[send-loop] fatal", err));
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[whatsapp-gateway] listening on ${PORT}`);
+    console.log("[whatsapp] receipt photos are sent as jpeg");
   });
 }
 
