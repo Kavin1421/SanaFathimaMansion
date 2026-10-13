@@ -1,0 +1,16 @@
+# Deploy only. The Kevin host is on Tailscale, so this job runs on a
+# self-hosted runner labeled "kevin" (the machine itself). Cloud runners
+# cannot open that network. Until the runner is installed, use
+# deploy/kevin-update.sh on the machine.
+name: Deploy Kevin
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Update WhatsApp gateway
+    runs-on: [self-hosted, kevin]
+    steps:
+      - name: Pull and rebuild
+        run: bash /opt/homelab/SanaFathimaMansion/deploy/kevin-update.sh

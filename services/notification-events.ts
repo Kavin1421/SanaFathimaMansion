@@ -2,9 +2,9 @@ import { connectDb } from "@/lib/db";
 import { NotificationEvent } from "@/models/NotificationEvent";
 
 export async function appendNotificationEvent(input: {
-  channel: "email" | "telegram";
+  channel: "email" | "telegram" | "whatsapp";
   eventType: string;
-  status: "sent" | "failed" | "skipped";
+  status: "sent" | "failed" | "skipped" | "queued";
   recipient?: string;
   message?: string;
   metadata?: Record<string, unknown> | null;
@@ -22,9 +22,9 @@ export async function appendNotificationEvent(input: {
 
 export type NotificationEventRow = {
   _id: string;
-  channel: "email" | "telegram";
+  channel: "email" | "telegram" | "whatsapp";
   eventType: string;
-  status: "sent" | "failed" | "skipped";
+  status: "sent" | "failed" | "skipped" | "queued";
   recipient?: string;
   message?: string;
   metadata?: Record<string, unknown> | null;
@@ -32,8 +32,8 @@ export type NotificationEventRow = {
 };
 
 export async function listNotificationEvents(params: {
-  channel?: "email" | "telegram";
-  status?: "sent" | "failed" | "skipped";
+  channel?: "email" | "telegram" | "whatsapp";
+  status?: "sent" | "failed" | "skipped" | "queued";
   eventType?: string;
   search?: string;
   limit: number;
@@ -63,9 +63,9 @@ export async function listNotificationEvents(params: {
     total,
     rows: rows.map((r) => ({
       _id: String(r._id),
-      channel: r.channel as "email" | "telegram",
+      channel: r.channel as "email" | "telegram" | "whatsapp",
       eventType: String(r.eventType),
-      status: r.status as "sent" | "failed" | "skipped",
+      status: r.status as "sent" | "failed" | "skipped" | "queued",
       recipient: r.recipient ?? undefined,
       message: r.message ?? undefined,
       metadata: (r.metadata as Record<string, unknown> | null | undefined) ?? null,
@@ -76,7 +76,7 @@ export async function listNotificationEvents(params: {
 
 /** Skip duplicate Telegram/email within a short window (prevents double-send on retries). */
 export async function hasRecentNotificationDuplicate(input: {
-  channel: "email" | "telegram";
+  channel: "email" | "telegram" | "whatsapp";
   dedupeKey: string;
   withinMs?: number;
 }): Promise<boolean> {

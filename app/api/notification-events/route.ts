@@ -21,9 +21,11 @@ export async function GET(req: Request) {
   const eventType = searchParams.get("eventType") ?? undefined;
   const search = searchParams.get("search") ?? undefined;
   const channel =
-    channelRaw === "email" || channelRaw === "telegram" ? channelRaw : undefined;
+    channelRaw === "email" || channelRaw === "telegram" || channelRaw === "whatsapp" ? channelRaw : undefined;
   const status =
-    statusRaw === "sent" || statusRaw === "failed" || statusRaw === "skipped" ? statusRaw : undefined;
+    statusRaw === "sent" || statusRaw === "failed" || statusRaw === "skipped" || statusRaw === "queued"
+      ? statusRaw
+      : undefined;
 
   const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? "25") || 25));

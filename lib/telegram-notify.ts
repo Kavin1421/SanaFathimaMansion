@@ -17,6 +17,8 @@ import {
   appendNotificationEvent,
   hasRecentNotificationDuplicate,
 } from "@/services/notification-events";
+import { formatWhatsAppExpense, type WhatsAppExpenseVariant } from "@/lib/whatsapp-message";
+import { dispatchWhatsApp, plainTextForWhatsApp } from "@/services/whatsapp-dispatch";
 import type { ExpenseDTO, PreBillDTO } from "@/types";
 import { format, parse } from "date-fns";
 
@@ -135,6 +137,8 @@ function formatExpenseCard(data: ExpenseAlertPayload, amt: string): string {
     `👤 ${escapeHtml(data.payerName)}${escapeHtml(DOT)}🏷 ${escapeHtml(data.categoryLabel)}`,
     `📅 ${escapeHtml(data.dateLine)}`,
     formatSplitLine(data),
+    ...(data.description?.trim() ? [`📝 ${escapeHtml(data.description.trim())}`] : []),
+    ...(data.notes?.trim() ? [`🗒️ ${escapeHtml(data.notes.trim())}`] : []),
   ]);
 }
 
@@ -230,6 +234,8 @@ type ExpenseAlertPayload = {
   detailUrl?: string;
   hasBill?: boolean;
   billCount?: number;
+  notes?: string;
+  description?: string;
   variant?: "created" | "updated" | "pending" | "approved" | "rejected" | "settlement";
   settlementToName?: string;
   rejectionReason?: string;
@@ -292,6 +298,34 @@ function formatExpenseAlertHtml(data: ExpenseAlertPayload): string {
   }
 
   return parts.join("\n");
+}
+
+function formatExpenseWhatsApp(data: ExpenseAlertPayload): string {
+  const variant = (data.variant ?? "created") as WhatsAppExpenseVariant;
+  return formatWhatsAppExpense({
+    houseName: data.appName,
+    variant,
+    title: data.title,
+    amount: typeof data.amount === "number" ? data.amount : Number(data.amount) || 0,
+    payerName: data.payerName,
+    category: data.categoryLabel,
+    dateLine: data.dateLine,
+    description: data.description,
+    notes: data.notes,
+    splitMembers: data.splitMembers?.map((member) => ({
+      name: member.name,
+      amount: typeof member.amount === "number" ? member.amount : Number(member.amount) || 0,
+    })),
+    wholeHouse: !data.isSplit,
+    walletRemaining: data.walletRemaining,
+    totalSpent: data.totalSpent,
+    budget: data.budget,
+    detailUrl: data.detailUrl,
+    approvedByName: data.approvedByName,
+    rejectedByName: data.rejectedByName,
+    rejectionReason: data.rejectionReason,
+    settlementToName: data.settlementToName,
+  });
 }
 
 function formatMonthResetHtml(data: {
@@ -399,6 +433,13 @@ async function sendPipeline(input: {
     ...(input.metadata ?? {}),
     ...(input.dedupeKey ? { dedupeKey: input.dedupeKey } : {}),
   };
+
+  await dispatchWhatsApp({
+    text: plainTextForWhatsApp(input),
+    eventType: input.eventType,
+    metadata,
+    dedupeKey: input.dedupeKey,
+  });
 
   try {
     if (!isTelegramConfigured()) {
@@ -628,7 +669,7 @@ async function buildExpenseAlert(
   dto: ExpenseDTO,
   mode: ExpenseNotifyMode,
   extras?: { approvedByName?: string },
-): Promise<{ caption: string; monthKey: string; bill?: string }> {
+): Promise<{ caption: string; whatsapp: string; monthKey: string; bill?: string }> {
   const resolvedMode = resolveExpenseNotifyMode(dto, mode);
   const appName = await getHouseDisplayName();
   const payer = await User.findById(dto.paidBy).lean();
@@ -659,7 +700,10 @@ async function buildExpenseAlert(
 
   const isSplit = dto.splitEnabled !== false;
   const n = dto.splitBetween.length;
-  const sharePer = isSplit && n > 1 ? roundMoney(dto.amount / n) : null;
+  const customAmounts = new Map(
+    (dto.splitAmounts ?? []).map((share) => [share.userId, share.amount]),
+  );
+  const equalShare = isSplit && n > 1 ? roundMoney(dto.amount / n) : null;
   const splitMembers =
     isSplit && n > 1
       ? (
@@ -668,7 +712,10 @@ async function buildExpenseAlert(
             .lean()
         ).map((u) => ({
           name: u.name,
-          amount: sharePer ?? 0,
+          amount:
+            dto.splitMode === "custom"
+              ? (customAmounts.get(String(u._id)) ?? equalShare ?? 0)
+              : (equalShare ?? 0),
         }))
       : [];
 
@@ -686,7 +733,7 @@ async function buildExpenseAlert(
     dateLine,
     isSplit,
     splitCount: n,
-    splitShareAmount: sharePer ?? undefined,
+    splitShareAmount: equalShare ?? undefined,
     splitMembers: splitMembers.length > 0 ? splitMembers : undefined,
     walletRemaining: remaining,
     budget,
@@ -695,12 +742,15 @@ async function buildExpenseAlert(
     detailUrl: detailUrl ?? undefined,
     hasBill: billImages.length > 0,
     billCount: billImages.length,
+    notes: dto.notes,
+    description: dto.description,
     variant: resolvedMode,
     approvedByName: extras?.approvedByName,
   };
 
   return {
     caption: formatExpenseAlertHtml(alert),
+    whatsapp: formatExpenseWhatsApp(alert),
     monthKey,
     bill: bill,
   };
@@ -715,12 +765,13 @@ export function notifyTelegramExpense(
     try {
       await connectDb();
       const resolvedMode = resolveExpenseNotifyMode(dto, mode);
-      const { caption, monthKey, bill } = await buildExpenseAlert(dto, mode, extras);
+      const { caption, whatsapp, monthKey, bill } = await buildExpenseAlert(dto, mode, extras);
 
       await sendPipeline({
         imageUrl: bill,
         captionHtml: bill ? caption : undefined,
         html: bill ? undefined : caption,
+        plain: whatsapp,
         eventType: expenseEventType(resolvedMode),
         metadata: {
           expenseId: dto._id,
@@ -754,7 +805,7 @@ export function notifyTelegramExpenseRejected(
       const monthKey = monthKeyFromDate(expenseDate);
       const detailUrl = appDetailUrl(monthKey);
 
-      const html = formatExpenseAlertHtml({
+      const alert = {
         appName,
         title: dto.title,
         payerName,
@@ -768,13 +819,16 @@ export function notifyTelegramExpenseRejected(
         budget: null,
         budgetUsagePercent: null,
         detailUrl: detailUrl ?? undefined,
-        variant: "rejected",
+        notes: dto.notes,
+        description: dto.description,
+        variant: "rejected" as const,
         rejectionReason: reason.trim() || undefined,
         rejectedByName,
-      });
+      };
 
       await sendPipeline({
-        html,
+        html: formatExpenseAlertHtml(alert),
+        plain: formatExpenseWhatsApp(alert),
         eventType: "telegram_expense_rejected",
         metadata: {
           expenseId: dto._id,
@@ -809,7 +863,7 @@ export function notifyTelegramSettlementRecorded(
       const budgetUsagePercent =
         budget != null && budget > 0 ? Math.round((totalSpent / budget) * 100) : null;
       const detailUrl = appDetailUrl(monthKey);
-      const html = formatExpenseAlertHtml({
+      const alert = {
         appName,
         title: "Settlement",
         payerName: from?.name ?? "?",
@@ -824,11 +878,12 @@ export function notifyTelegramSettlementRecorded(
         totalSpent,
         budgetUsagePercent,
         detailUrl: detailUrl ?? undefined,
-        variant: "settlement",
+        variant: "settlement" as const,
         settlementToName: to?.name ?? "?",
-      });
+      };
       await sendPipeline({
-        html,
+        html: formatExpenseAlertHtml(alert),
+        plain: formatExpenseWhatsApp(alert),
         eventType: "telegram_settlement",
         metadata: {
           settlementId,

@@ -1,0 +1,21 @@
+services:
+  whatsapp-gateway:
+    build: .
+    image: homelab-whatsapp:local
+    container_name: homelab-whatsapp
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3020:3020"
+    volumes:
+      - wa-auth:/data/auth
+    networks:
+      - database
+
+networks:
+  database:
+    external: true
+    name: homelab_database
+
+volumes:
+  wa-auth:

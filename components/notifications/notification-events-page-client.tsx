@@ -13,14 +13,15 @@ import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { useMemo, useState } from "react";
 
-function statusClass(status: "sent" | "failed" | "skipped"): string {
+function statusClass(status: "sent" | "failed" | "skipped" | "queued"): string {
   if (status === "sent") return "bg-emerald-600/15 text-emerald-800 dark:text-emerald-300";
   if (status === "failed") return "bg-destructive/15 text-destructive";
+  if (status === "queued") return "bg-indigo-500/15 text-indigo-800 dark:text-indigo-200";
   return "bg-amber-500/15 text-amber-900 dark:text-amber-200";
 }
 
 function formatEventType(eventType: string): string {
-  return eventType.replace(/^telegram_/, "").replace(/_/g, " ");
+  return eventType.replace(/^(telegram|whatsapp)_/, "").replace(/_/g, " ");
 }
 
 function metadataSummary(metadata: Record<string, unknown> | null | undefined): string | null {
@@ -33,7 +34,7 @@ function metadataSummary(metadata: Record<string, unknown> | null | undefined): 
   if (typeof metadata.reason === "string") parts.push(`reason: ${metadata.reason}`);
   if (typeof metadata.title === "string" && !metadata.expenseTitle) parts.push(metadata.title);
   if (typeof metadata.amount === "number") parts.push(`₹${metadata.amount.toLocaleString("en-IN")}`);
-  if (typeof metadata.telegramError === "string") parts.push(metadata.telegramError);
+  if (typeof metadata.queueId === "string") parts.push(metadata.queueId);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
@@ -86,7 +87,7 @@ export function NotificationEventsPageClient() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Notification events</h2>
           <p className="text-sm text-muted-foreground">
-            Live delivery status for email and Telegram. Refreshes every 12 seconds.
+            Live delivery status for email, Telegram, and WhatsApp. Queued WhatsApp alerts send when the server is back. Refreshes every 12 seconds.
           </p>
         </div>
         {lastUpdated ? (
@@ -110,6 +111,7 @@ export function NotificationEventsPageClient() {
                 <SelectItem value="all">All channels</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
                 <SelectItem value="telegram">Telegram</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -120,6 +122,7 @@ export function NotificationEventsPageClient() {
               <SelectContent className="rounded-xl">
                 <SelectItem value="all">All status</SelectItem>
                 <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="queued">Queued</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
                 <SelectItem value="skipped">Skipped</SelectItem>
               </SelectContent>
@@ -156,8 +159,19 @@ export function NotificationEventsPageClient() {
                         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{format(new Date(row.createdAt), "MMM d, yyyy · HH:mm:ss")}</span>
                       </div>
                       {context ? <p className="text-sm font-medium">{context}</p> : null}
-                      <p className="text-sm text-muted-foreground">{row.recipient || "Household Telegram channel"}</p>
-                      {row.message ? <p className="text-xs text-destructive/90">{row.message}</p> : null}
+                      <p className="text-sm text-muted-foreground">
+                        {row.recipient ||
+                          (row.channel === "whatsapp"
+                            ? "Household WhatsApp"
+                            : row.channel === "telegram"
+                              ? "Household Telegram channel"
+                              : "No recipient")}
+                      </p>
+                      {row.message ? (
+                        <p className={`text-xs ${row.status === "failed" ? "text-destructive/90" : "text-muted-foreground"}`}>
+                          {row.message}
+                        </p>
+                      ) : null}
                     </li>
                   );
                 })}

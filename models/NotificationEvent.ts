@@ -1,7 +1,7 @@
 import mongoose, { Schema, type Model, type Types } from "mongoose";
 
-export type NotificationChannel = "email" | "telegram";
-export type NotificationStatus = "sent" | "failed" | "skipped";
+export type NotificationChannel = "email" | "telegram" | "whatsapp";
+export type NotificationStatus = "sent" | "failed" | "skipped" | "queued";
 
 export type NotificationEventDocument = {
   _id: Types.ObjectId;
@@ -16,9 +16,9 @@ export type NotificationEventDocument = {
 
 const notificationEventSchema = new Schema<NotificationEventDocument>(
   {
-    channel: { type: String, enum: ["email", "telegram"], required: true },
+    channel: { type: String, enum: ["email", "telegram", "whatsapp"], required: true },
     eventType: { type: String, required: true },
-    status: { type: String, enum: ["sent", "failed", "skipped"], required: true },
+    status: { type: String, enum: ["sent", "failed", "skipped", "queued"], required: true },
     recipient: { type: String },
     message: { type: String },
     metadata: { type: Schema.Types.Mixed, default: null },
@@ -30,6 +30,7 @@ notificationEventSchema.index({ channel: 1, createdAt: -1 });
 notificationEventSchema.index({ eventType: 1, createdAt: -1 });
 notificationEventSchema.index({ status: 1, createdAt: -1 });
 notificationEventSchema.index({ "metadata.dedupeKey": 1, createdAt: -1 });
+notificationEventSchema.index({ "metadata.queueId": 1, createdAt: -1 });
 
 export const NotificationEvent: Model<NotificationEventDocument> =
   mongoose.models.NotificationEvent ??
