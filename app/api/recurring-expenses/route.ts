@@ -4,6 +4,8 @@ import { isAdminSession } from "@/lib/admin";
 import { performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { createRecurringExpenseSchema } from "@/lib/validation";
 import { appendAuditLog } from "@/services/audit-log";
+import { notifyHousehold } from "@/lib/telegram-notify";
+import { formatInr } from "@/lib/utils";
 import { createRecurringExpense, listRecurringExpenses } from "@/services/recurring-expenses";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +44,16 @@ export async function POST(req: Request) {
     const data = await createRecurringExpense({
       ...parsed.data,
       createdBy: session.user.id,
+    });
+    notifyHousehold({
+      heading: "Recurring expense added",
+      title: data.title,
+      lines: [formatInr(data.amount), data.category, `Day ${data.dayOfMonth} of each month`],
+      path: "/dashboard",
+      icon: "🔁",
+      eventType: "telegram_recurring_created",
+      dedupeKey: `recurring:${data._id}:created`,
+      metadata: { recurringId: data._id },
     });
     return NextResponse.json(data, { status: 201 });
   } catch (e) {

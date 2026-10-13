@@ -4,6 +4,7 @@ export type WhatsAppExpenseVariant =
   | "pending"
   | "approved"
   | "rejected"
+  | "deleted"
   | "settlement";
 
 export type WhatsAppExpenseMessage = {
@@ -22,10 +23,21 @@ export type WhatsAppExpenseMessage = {
   totalSpent?: number | null;
   budget?: number | null;
   detailUrl?: string;
+  receiptCount?: number;
   approvedByName?: string;
   rejectedByName?: string;
   rejectionReason?: string;
+  removedByName?: string;
+  undone?: boolean;
   settlementToName?: string;
+};
+
+export type WhatsAppNotice = {
+  houseName: string;
+  heading: string;
+  title: string;
+  lines?: string[];
+  detailUrl?: string;
 };
 
 const HEADING: Record<WhatsAppExpenseVariant, string> = {
@@ -34,6 +46,7 @@ const HEADING: Record<WhatsAppExpenseVariant, string> = {
   pending: "Waiting for approval",
   approved: "Expense approved",
   rejected: "Expense declined",
+  deleted: "Expense removed",
   settlement: "Settlement recorded",
 };
 
@@ -46,8 +59,21 @@ function clean(value?: string): string {
 }
 
 /** WhatsApp-native expense alert. Uses *bold* and short sections, not Telegram HTML. */
+export function formatWhatsAppNotice(data: WhatsAppNotice): string {
+  const lines = [data.houseName, data.heading, "", `*${data.title}*`];
+  const details = (data.lines ?? []).map((line) => line.trim()).filter(Boolean);
+  if (details.length > 0) {
+    lines.push("");
+    lines.push(...details);
+  }
+  const url = data.detailUrl?.trim();
+  if (url) lines.push("", url);
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function formatWhatsAppExpense(data: WhatsAppExpenseMessage): string {
-  const lines: string[] = [data.houseName, HEADING[data.variant], ""];
+  const heading = data.variant === "deleted" && data.undone ? "Expense undone" : HEADING[data.variant];
+  const lines: string[] = [data.houseName, heading, ""];
 
   if (data.variant === "settlement") {
     lines.push(`*${data.payerName}* paid *${data.settlementToName ?? "someone"}*`);
@@ -69,6 +95,11 @@ export function formatWhatsAppExpense(data: WhatsAppExpenseMessage): string {
   }
   if (data.variant === "pending") {
     lines.push("", "The wallet updates after this is approved.");
+  }
+  if (data.variant === "deleted") {
+    const who = clean(data.removedByName);
+    const verb = data.undone ? "Undone" : "Removed";
+    lines.push("", who ? `${verb} by ${who}` : `${verb} from the ledger`);
   }
 
   const description = clean(data.description);
@@ -97,6 +128,10 @@ export function formatWhatsAppExpense(data: WhatsAppExpenseMessage): string {
     if (data.totalSpent != null && data.budget != null) {
       lines.push(`${inr(data.totalSpent)} of ${inr(data.budget)} spent`);
     }
+  }
+
+  if (data.receiptCount && data.receiptCount > 0) {
+    lines.push("", data.receiptCount > 1 ? `${data.receiptCount} receipts` : "Receipt");
   }
 
   if (clean(data.detailUrl)) {

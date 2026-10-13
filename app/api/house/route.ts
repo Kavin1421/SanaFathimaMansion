@@ -4,6 +4,7 @@ import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/aud
 import { connectDb } from "@/lib/db";
 import { getHouseDisplayName } from "@/lib/house-name";
 import { appendAuditLog } from "@/services/audit-log";
+import { notifyHousehold } from "@/lib/telegram-notify";
 import { HouseSettings } from "@/models/HouseSettings";
 import { z } from "zod";
 
@@ -71,6 +72,15 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error("[audit] update house", e);
     }
+    notifyHousehold({
+      heading: "House name updated",
+      title: parsed.data.displayName,
+      lines: [`Updated by ${session.user.name ?? "Someone"}`],
+      path: "/dashboard",
+      icon: "🏠",
+      eventType: "telegram_house_renamed",
+      metadata: { displayName: parsed.data.displayName },
+    });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);

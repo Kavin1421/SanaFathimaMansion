@@ -18,7 +18,7 @@ import {
   type LinkPreBillExpenseInput,
   type UpdatePreBillInput,
 } from "@/lib/validation";
-import { notifyTelegramPreBillEdited, notifyTelegramPreBillFinalized } from "@/lib/telegram-notify";
+import { notifyHousehold, notifyTelegramPreBillEdited, notifyTelegramPreBillFinalized } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import {
   createPreBill,
@@ -61,6 +61,16 @@ export async function createPreBillAction(
   }
   try {
     const data = await createPreBill(parsed.data, ctx.ledgerUserId);
+    notifyHousehold({
+      heading: "Pre-bill created",
+      title: data.title,
+      lines: [`${data.items.length} item${data.items.length === 1 ? "" : "s"}`],
+      path: `/pre-bills/${data._id}`,
+      icon: "🛒",
+      eventType: "telegram_pre_bill_created",
+      dedupeKey: `prebill:${data._id}:created`,
+      metadata: { preBillId: data._id },
+    });
     try {
       await appendAuditLog({
         actionType: "CREATE_PRE_BILL",
@@ -211,12 +221,26 @@ export async function deletePreBillAction(
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
   }
   try {
+    const existing = await getPreBillById(parsed.data.id);
     const ok = await deletePreBill(
       parsed.data.id,
       ctx.session.user?.email,
       isAdminSession(ctx.session),
     );
     if (!ok) return { ok: false, error: "Pre-bill not found" };
+    if (existing) {
+      const actor = ctx.session.user?.name?.trim() || "Someone";
+      notifyHousehold({
+        heading: "Pre-bill removed",
+        title: existing.title,
+        lines: [`Removed by ${actor}`],
+        path: "/pre-bills",
+        icon: "🛒",
+        eventType: "telegram_pre_bill_deleted",
+        dedupeKey: `prebill:${existing._id}:deleted`,
+        metadata: { preBillId: existing._id },
+      });
+    }
     try {
       await appendAuditLog({
         actionType: "DELETE_PRE_BILL",
@@ -245,6 +269,16 @@ export async function duplicatePreBillAction(
   try {
     const data = await duplicatePreBill(parsed.data.id, ctx.ledgerUserId);
     if (!data) return { ok: false, error: "Pre-bill not found" };
+    notifyHousehold({
+      heading: "Pre-bill copied",
+      title: data.title,
+      lines: [`${data.items.length} item${data.items.length === 1 ? "" : "s"}`],
+      path: `/pre-bills/${data._id}`,
+      icon: "🛒",
+      eventType: "telegram_pre_bill_copied",
+      dedupeKey: `prebill:${data._id}:created`,
+      metadata: { preBillId: data._id, sourceId: parsed.data.id },
+    });
     try {
       await appendAuditLog({
         actionType: "DUPLICATE_PRE_BILL",

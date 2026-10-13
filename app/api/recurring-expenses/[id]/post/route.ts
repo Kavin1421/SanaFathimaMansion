@@ -4,6 +4,8 @@ import { isAdminSession } from "@/lib/admin";
 import { performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { monthKeyFromDate } from "@/lib/dates";
 import { appendAuditLog } from "@/services/audit-log";
+import { notifyTelegramExpense } from "@/lib/telegram-notify";
+import { getExpenseById } from "@/services/expenses";
 import { postRecurring } from "@/services/recurring-expenses";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +46,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     } catch (e) {
       console.error("[audit] recurring posted", e);
     }
+    const expense = await getExpenseById(result.expenseId);
+    if (expense) notifyTelegramExpense(expense, "created");
     return NextResponse.json(result);
   } catch (e) {
     console.error(e);

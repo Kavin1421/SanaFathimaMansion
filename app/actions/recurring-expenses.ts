@@ -7,14 +7,16 @@ import { isAdminSession } from "@/lib/admin";
 import { performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { createRecurringExpenseSchema, type CreateRecurringExpenseInput } from "@/lib/validation";
 import { appendAuditLog } from "@/services/audit-log";
+import { notifyHousehold, notifyTelegramExpense } from "@/lib/telegram-notify";
+import { formatInr } from "@/lib/utils";
+import { getExpenseById } from "@/services/expenses";
 import {
   createRecurringExpense,
   deleteRecurringExpense,
+  getRecurringExpenseById,
   postRecurring,
   updateRecurringExpense,
 } from "@/services/recurring-expenses";
-import { notifyTelegramExpense } from "@/lib/telegram-notify";
-import { getExpenseById } from "@/services/expenses";
 import type { ActionResult } from "./users";
 
 async function requireUserSession() {
@@ -37,6 +39,16 @@ export async function createRecurringExpenseAction(
     const data = await createRecurringExpense({
       ...parsed.data,
       createdBy: session.user.id,
+    });
+    notifyHousehold({
+      heading: "Recurring expense added",
+      title: data.title,
+      lines: [formatInr(data.amount), data.category, `Day ${data.dayOfMonth} of each month`],
+      path: "/dashboard",
+      icon: "🔁",
+      eventType: "telegram_recurring_created",
+      dedupeKey: `recurring:${data._id}:created`,
+      metadata: { recurringId: data._id },
     });
     revalidatePath("/dashboard");
     return { ok: true, data };
@@ -63,6 +75,20 @@ export async function updateRecurringExpenseAction(input: {
   try {
     const data = await updateRecurringExpense(input);
     if (!data) return { ok: false, error: "Recurring expense not found" };
+    notifyHousehold({
+      heading: "Recurring expense updated",
+      title: data.title,
+      lines: [
+        formatInr(data.amount),
+        data.category,
+        `Day ${data.dayOfMonth} of each month`,
+        data.active ? "Active" : "Paused",
+      ],
+      path: "/dashboard",
+      icon: "🔁",
+      eventType: "telegram_recurring_updated",
+      metadata: { recurringId: data._id },
+    });
     revalidatePath("/dashboard");
     return { ok: true, data };
   } catch (e) {
@@ -75,8 +101,21 @@ export async function deleteRecurringExpenseAction(id: string): Promise<ActionRe
   if (!session) return { ok: false, error: "Unauthorized" };
   if (!isAdminSession(session)) return { ok: false, error: "Only an admin can delete recurring expenses" };
   try {
+    const before = await getRecurringExpenseById(id);
     const ok = await deleteRecurringExpense(id);
     if (!ok) return { ok: false, error: "Recurring expense not found" };
+    if (before) {
+      notifyHousehold({
+        heading: "Recurring expense removed",
+        title: before.title,
+        lines: [formatInr(before.amount), `Removed by ${session.user.name ?? "Someone"}`],
+        path: "/dashboard",
+        icon: "🔁",
+        eventType: "telegram_recurring_deleted",
+        dedupeKey: `recurring:${before._id}:deleted`,
+        metadata: { recurringId: before._id },
+      });
+    }
     revalidatePath("/dashboard");
     return { ok: true, data: null };
   } catch (e) {

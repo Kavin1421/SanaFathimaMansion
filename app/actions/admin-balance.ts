@@ -7,6 +7,8 @@ import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/aud
 import { isAdminSession } from "@/lib/admin";
 import { connectDb } from "@/lib/db";
 import { User } from "@/models/User";
+import { notifyHousehold } from "@/lib/telegram-notify";
+import { formatInr } from "@/lib/utils";
 import { appendAuditLog } from "@/services/audit-log";
 import { getUserById } from "@/services/users";
 import type { ActionResult } from "./users";
@@ -58,6 +60,19 @@ export async function adminOverrideBalanceAction(
     }
     const r = await User.findByIdAndUpdate(userId, patch);
     if (!r) return { ok: false, error: "User not found" };
+    notifyHousehold({
+      heading: "Balance adjusted",
+      title: before?.name ?? "Roommate",
+      lines: [
+        `Balance set to ${formatInr(balance)}`,
+        ...(totalPaid !== undefined && Number.isFinite(totalPaid) ? [`Total paid ${formatInr(totalPaid)}`] : []),
+        `Adjusted by ${session.user.name ?? "Someone"}`,
+      ],
+      path: "/users",
+      icon: "💳",
+      eventType: "telegram_balance_override",
+      metadata: { userId, balance },
+    });
     try {
       await appendAuditLog({
         actionType: "UPDATE_USER",

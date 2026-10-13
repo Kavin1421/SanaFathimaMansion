@@ -12,7 +12,7 @@ import {
   type CreateExpenseInput,
   type UpdateExpenseInput,
 } from "@/lib/validation";
-import { notifyTelegramExpense, notifyTelegramExpenseRejected } from "@/lib/telegram-notify";
+import { notifyHousehold, notifyTelegramExpense, notifyTelegramExpenseRejected } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import {
   addExpenseComment,
@@ -151,7 +151,7 @@ export async function updateExpenseAction(
     }
     if (data.status === "pending") {
       notifyTelegramExpense(data, "pending");
-    } else if (data.status === "approved") {
+    } else {
       notifyTelegramExpense(data, "updated");
     }
     revalidatePath("/dashboard");
@@ -199,6 +199,9 @@ export async function deleteExpenseAction(id: string): Promise<ActionResult<null
     const before = await getExpenseById(id);
     const ok = await deleteExpense(id);
     if (!ok) return { ok: false, error: "Expense not found" };
+    if (before) {
+      notifyTelegramExpense(before, "deleted", { deletedByName: session.user.name ?? undefined });
+    }
     try {
       await appendAuditLog({
         actionType: "DELETE_EXPENSE",
@@ -244,6 +247,15 @@ export async function addExpenseCommentAction(input: {
       text,
     });
     if (!data) return { ok: false, error: "Expense not found" };
+    notifyHousehold({
+      heading: "Comment added",
+      title: data.title,
+      lines: [`${session.user.name ?? "Someone"} wrote`, text],
+      path: "/expenses",
+      icon: "💬",
+      eventType: "telegram_expense_comment",
+      metadata: { expenseId: data._id },
+    });
     try {
       await appendAuditLog({
         actionType: "ADD_EXPENSE_COMMENT",
@@ -378,6 +390,10 @@ export async function undoExpenseAction(
     }
     const data = await undoExpense(id);
     if (!data) return { ok: false, error: "Expense not found" };
+    notifyTelegramExpense(before, "deleted", {
+      deletedByName: session.user.name ?? undefined,
+      undone: true,
+    });
     try {
       await appendAuditLog({
         actionType: "UNDO_EXPENSE",

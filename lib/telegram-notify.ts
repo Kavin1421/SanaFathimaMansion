@@ -17,7 +17,7 @@ import {
   appendNotificationEvent,
   hasRecentNotificationDuplicate,
 } from "@/services/notification-events";
-import { formatWhatsAppExpense, type WhatsAppExpenseVariant } from "@/lib/whatsapp-message";
+import { formatWhatsAppExpense, formatWhatsAppNotice, type WhatsAppExpenseVariant } from "@/lib/whatsapp-message";
 import { dispatchWhatsApp, plainTextForWhatsApp } from "@/services/whatsapp-dispatch";
 import type { ExpenseDTO, PreBillDTO } from "@/types";
 import { format, parse } from "date-fns";
@@ -82,6 +82,8 @@ function expenseVariantMeta(variant: NonNullable<ExpenseAlertPayload["variant"]>
       return { icon: "❌", subtitle: "Expense rejected", badge: "❌ REJECTED" };
     case "updated":
       return { icon: "✏️", subtitle: "Expense updated", badge: null };
+    case "deleted":
+      return { icon: "🗑️", subtitle: "Expense removed", badge: null };
     case "settlement":
       return { icon: "🤝", subtitle: "Settlement recorded", badge: null };
     default:
@@ -125,6 +127,11 @@ function formatStatusLine(data: ExpenseAlertPayload, variant: NonNullable<Expens
     const by = data.rejectedByName ? ` · ${escapeHtml(data.rejectedByName)}` : "";
     const reason = data.rejectionReason ? `\n<i>${escapeHtml(data.rejectionReason)}</i>` : "";
     return `<b>${escapeHtml(meta.badge ?? "")}</b>${by ? `\n<i>Rejected by${by}</i>` : ""}${reason}`;
+  }
+  if (variant === "deleted") {
+    const verb = data.undone ? "Undone" : "Removed";
+    const who = data.removedByName?.trim();
+    return `<i>${escapeHtml(who ? `${verb} by ${who}` : `${verb} from the ledger`)}</i>`;
   }
   return null;
 }
@@ -236,15 +243,17 @@ type ExpenseAlertPayload = {
   billCount?: number;
   notes?: string;
   description?: string;
-  variant?: "created" | "updated" | "pending" | "approved" | "rejected" | "settlement";
+  variant?: "created" | "updated" | "pending" | "approved" | "rejected" | "deleted" | "settlement";
   settlementToName?: string;
   rejectionReason?: string;
   approvedByName?: string;
   rejectedByName?: string;
+  removedByName?: string;
+  undone?: boolean;
   totalSpent?: number | null;
 };
 
-export type ExpenseNotifyMode = "created" | "updated" | "pending" | "approved";
+export type ExpenseNotifyMode = "created" | "updated" | "pending" | "approved" | "deleted";
 
 function formatExpenseAlertHtml(data: ExpenseAlertPayload): string {
   const amt = boldRupee(data.amount);
@@ -321,9 +330,12 @@ function formatExpenseWhatsApp(data: ExpenseAlertPayload): string {
     totalSpent: data.totalSpent,
     budget: data.budget,
     detailUrl: data.detailUrl,
+    receiptCount: data.hasBill ? (data.billCount ?? 1) : undefined,
     approvedByName: data.approvedByName,
     rejectedByName: data.rejectedByName,
     rejectionReason: data.rejectionReason,
+    removedByName: data.removedByName,
+    undone: data.undone,
     settlementToName: data.settlementToName,
   });
 }
@@ -424,6 +436,7 @@ async function sendPipeline(input: {
   html?: string;
   plain?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   captionHtml?: string;
   eventType: string;
   metadata?: Record<string, unknown> | null;
@@ -434,8 +447,12 @@ async function sendPipeline(input: {
     ...(input.dedupeKey ? { dedupeKey: input.dedupeKey } : {}),
   };
 
+  const imageUrls = (input.imageUrls ?? []).map((url) => url.trim()).filter(Boolean);
+  if (imageUrls.length === 0 && input.imageUrl?.trim()) imageUrls.push(input.imageUrl.trim());
+
   await dispatchWhatsApp({
     text: plainTextForWhatsApp(input),
+    imageUrls,
     eventType: input.eventType,
     metadata,
     dedupeKey: input.dedupeKey,
@@ -638,6 +655,58 @@ export function notifyTelegramPreBillShoppingCompleted(title: string): void {
   })();
 }
 
+function appPath(path: string): string | undefined {
+  const raw = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const base = raw?.replace(/\/$/, "");
+  if (!base) return undefined;
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/** Household create, edit, and delete notices that are not expense cards. */
+export function notifyHousehold(input: {
+  heading: string;
+  title: string;
+  lines?: string[];
+  path?: string;
+  icon?: string;
+  eventType: string;
+  dedupeKey?: string;
+  metadata?: Record<string, unknown> | null;
+}): void {
+  const title = input.title.trim();
+  if (!title) return;
+  void (async () => {
+    try {
+      await connectDb();
+      const houseName = await getHouseDisplayName();
+      const lines = (input.lines ?? []).map((line) => line.trim()).filter(Boolean);
+      const detailUrl = input.path ? appPath(input.path) : undefined;
+      const whatsapp = formatWhatsAppNotice({
+        houseName,
+        heading: input.heading,
+        title,
+        lines,
+        detailUrl,
+      });
+      const html = [
+        msgBanner(houseName, input.heading, input.icon ?? "📌"),
+        "",
+        msgBlockquote([`<b>${escapeHtml(title)}</b>`, ...lines.map((line) => escapeHtml(line))]),
+        ...(detailUrl ? ["", msgOpenLink(detailUrl)] : []),
+      ].join("\n");
+      await sendPipeline({
+        html,
+        plain: whatsapp,
+        eventType: input.eventType,
+        dedupeKey: input.dedupeKey,
+        metadata: input.metadata,
+      });
+    } catch (e) {
+      console.error("[telegram-notify] household", e);
+    }
+  })();
+}
+
 /** Fire-and-forget plain text (balance reminders, summaries). */
 export function notifyTelegramText(text: string): void {
   if (!text.trim()) return;
@@ -648,6 +717,7 @@ export function notifyTelegramText(text: string): void {
 }
 
 function resolveExpenseNotifyMode(dto: ExpenseDTO, mode: ExpenseNotifyMode): ExpenseNotifyMode {
+  if (mode === "deleted") return "deleted";
   if (mode === "created" && dto.status === "pending") return "pending";
   return mode;
 }
@@ -660,6 +730,8 @@ function expenseEventType(mode: ExpenseNotifyMode): string {
       return "telegram_expense_approved";
     case "updated":
       return "telegram_expense_updated";
+    case "deleted":
+      return "telegram_expense_deleted";
     default:
       return "telegram_expense_created";
   }
@@ -668,8 +740,8 @@ function expenseEventType(mode: ExpenseNotifyMode): string {
 async function buildExpenseAlert(
   dto: ExpenseDTO,
   mode: ExpenseNotifyMode,
-  extras?: { approvedByName?: string },
-): Promise<{ caption: string; whatsapp: string; monthKey: string; bill?: string }> {
+  extras?: { approvedByName?: string; deletedByName?: string; undone?: boolean },
+): Promise<{ caption: string; whatsapp: string; monthKey: string; bill?: string; bills: string[] }> {
   const resolvedMode = resolveExpenseNotifyMode(dto, mode);
   const appName = await getHouseDisplayName();
   const payer = await User.findById(dto.paidBy).lean();
@@ -746,29 +818,33 @@ async function buildExpenseAlert(
     description: dto.description,
     variant: resolvedMode,
     approvedByName: extras?.approvedByName,
+    removedByName: extras?.deletedByName,
+    undone: extras?.undone,
   };
 
   return {
     caption: formatExpenseAlertHtml(alert),
     whatsapp: formatExpenseWhatsApp(alert),
     monthKey,
-    bill: bill,
+    bill,
+    bills: billImages,
   };
 }
 
 export function notifyTelegramExpense(
   dto: ExpenseDTO,
   mode: ExpenseNotifyMode = "created",
-  extras?: { approvedByName?: string },
+  extras?: { approvedByName?: string; deletedByName?: string; undone?: boolean },
 ): void {
   void (async () => {
     try {
       await connectDb();
       const resolvedMode = resolveExpenseNotifyMode(dto, mode);
-      const { caption, whatsapp, monthKey, bill } = await buildExpenseAlert(dto, mode, extras);
+      const { caption, whatsapp, monthKey, bill, bills } = await buildExpenseAlert(dto, mode, extras);
 
       await sendPipeline({
         imageUrl: bill,
+        imageUrls: bills,
         captionHtml: bill ? caption : undefined,
         html: bill ? undefined : caption,
         plain: whatsapp,
@@ -805,6 +881,7 @@ export function notifyTelegramExpenseRejected(
       const monthKey = monthKeyFromDate(expenseDate);
       const detailUrl = appDetailUrl(monthKey);
 
+      const billImages = normalizeBillImages({ billImages: dto.billImages, billImage: dto.billImage });
       const alert = {
         appName,
         title: dto.title,
@@ -819,6 +896,8 @@ export function notifyTelegramExpenseRejected(
         budget: null,
         budgetUsagePercent: null,
         detailUrl: detailUrl ?? undefined,
+        hasBill: billImages.length > 0,
+        billCount: billImages.length,
         notes: dto.notes,
         description: dto.description,
         variant: "rejected" as const,
@@ -827,7 +906,10 @@ export function notifyTelegramExpenseRejected(
       };
 
       await sendPipeline({
-        html: formatExpenseAlertHtml(alert),
+        imageUrl: billImages[0],
+        imageUrls: billImages,
+        captionHtml: billImages.length > 0 ? formatExpenseAlertHtml(alert) : undefined,
+        html: billImages.length > 0 ? undefined : formatExpenseAlertHtml(alert),
         plain: formatExpenseWhatsApp(alert),
         eventType: "telegram_expense_rejected",
         metadata: {
@@ -849,6 +931,7 @@ export function notifyTelegramSettlementRecorded(
   fromUserId: string,
   toUserId: string,
   amount: number,
+  proofUrl?: string,
 ): void {
   void (async () => {
     try {
@@ -863,6 +946,7 @@ export function notifyTelegramSettlementRecorded(
       const budgetUsagePercent =
         budget != null && budget > 0 ? Math.round((totalSpent / budget) * 100) : null;
       const detailUrl = appDetailUrl(monthKey);
+      const proof = proofUrl?.trim();
       const alert = {
         appName,
         title: "Settlement",
@@ -878,11 +962,16 @@ export function notifyTelegramSettlementRecorded(
         totalSpent,
         budgetUsagePercent,
         detailUrl: detailUrl ?? undefined,
+        hasBill: Boolean(proof),
+        billCount: proof ? 1 : undefined,
         variant: "settlement" as const,
         settlementToName: to?.name ?? "?",
       };
       await sendPipeline({
-        html: formatExpenseAlertHtml(alert),
+        imageUrl: proof,
+        imageUrls: proof ? [proof] : [],
+        captionHtml: proof ? formatExpenseAlertHtml(alert) : undefined,
+        html: proof ? undefined : formatExpenseAlertHtml(alert),
         plain: formatExpenseWhatsApp(alert),
         eventType: "telegram_settlement",
         metadata: {

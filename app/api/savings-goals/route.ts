@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAuthSession } from "@/lib/api-auth";
 import { createSavingsGoalSchema } from "@/lib/validation";
+import { notifyHousehold } from "@/lib/telegram-notify";
+import { formatInr } from "@/lib/utils";
 import { listSavingsGoals, createSavingsGoal } from "@/services/savings-goals";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +38,16 @@ export async function POST(req: Request) {
     const goal = await createSavingsGoal({
       ...parsed.data,
       createdBy: session.user.id,
+    });
+    notifyHousehold({
+      heading: "Savings goal added",
+      title: goal.title,
+      lines: [`${formatInr(goal.currentAmount)} of ${formatInr(goal.targetAmount)}`],
+      path: "/dashboard",
+      icon: "🎯",
+      eventType: "telegram_savings_created",
+      dedupeKey: `savings:${goal._id}:created`,
+      metadata: { savingsGoalId: goal._id },
     });
     return NextResponse.json(goal, { status: 201 });
   } catch (e) {

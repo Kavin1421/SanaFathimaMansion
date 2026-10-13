@@ -6,6 +6,7 @@ export type WhatsAppOutboxDocument = {
   _id: Types.ObjectId;
   queueId: string;
   text: string;
+  imageUrls?: string[];
   eventType: string;
   dedupeKey?: string;
   status: WhatsAppOutboxStatus;
@@ -22,6 +23,7 @@ const whatsAppOutboxSchema = new Schema<WhatsAppOutboxDocument>(
   {
     queueId: { type: String, required: true, unique: true },
     text: { type: String, required: true },
+    imageUrls: { type: [String], default: undefined },
     eventType: { type: String, required: true },
     dedupeKey: { type: String },
     status: { type: String, enum: ["queued", "sending", "sent", "failed"], default: "queued" },

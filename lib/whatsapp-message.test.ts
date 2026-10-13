@@ -27,7 +27,22 @@ describe("formatWhatsAppExpense", () => {
     expect(text).toContain("*₹48*");
     expect(text).toContain("Rajesh  ·  ₹24");
     expect(text).toContain("₹12,400 remaining");
+    expect(text).not.toContain("Receipt");
     expect(text).toContain("https://sana.campusresults.co.in/expenses?month=2026-10");
+  });
+
+  it("names the receipt when a bill photo is attached", () => {
+    const text = formatWhatsAppExpense({
+      houseName: "SanaFathima Mansion",
+      variant: "created",
+      title: "Milk and bread",
+      amount: 90,
+      payerName: "Abdullah",
+      category: "Groceries",
+      dateLine: "14 Oct 2026",
+      receiptCount: 1,
+    });
+    expect(text.endsWith("Receipt")).toBe(true);
   });
 
   it("states who was paid on a settlement", () => {
@@ -43,5 +58,20 @@ describe("formatWhatsAppExpense", () => {
     });
     expect(text).toContain("*Dinesh* paid *Roshan*");
     expect(text).toContain("*₹500*");
+  });
+
+  it("says who removed an expense", () => {
+    const text = formatWhatsAppExpense({
+      houseName: "SanaFathima Mansion",
+      variant: "deleted",
+      title: "Milk and bread",
+      amount: 90,
+      payerName: "Abdullah",
+      category: "Groceries",
+      dateLine: "14 Oct 2026",
+      removedByName: "Kavinkumar K",
+    });
+    expect(text).toContain("Expense removed");
+    expect(text).toContain("Removed by Kavinkumar K");
   });
 });

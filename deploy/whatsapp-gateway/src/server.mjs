@@ -20,6 +20,9 @@ const STAMP_AFTER_MS = 20_000;
 const MAX_ATTEMPTS = 8;
 const RECONCILE_AGE_MS = 8_000;
 const SEND_GAP_MS = 1_000;
+const CAPTION_MAX = 1024;
+const MAX_IMAGES = 3;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 if (!REDIS_URL) {
   console.error("REDIS_URL is required");
@@ -37,6 +40,7 @@ const outboxSchema = new mongoose.Schema(
   {
     queueId: { type: String, required: true, unique: true },
     text: String,
+    imageUrls: [String],
     eventType: String,
     status: String,
     offlineAtEnqueue: Boolean,
@@ -139,6 +143,70 @@ function shouldStamp(job) {
   return Date.now() - created >= STAMP_AFTER_MS;
 }
 
+function blockedImageHost(hostname) {
+  const host = String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+  if (!host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return true;
+  if (host === "0.0.0.0" || host === "::1" || host === "169.254.169.254") return true;
+  if (host.startsWith("127.") || host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.")) {
+    return true;
+  }
+  return /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+}
+
+function sanitizeImageUrls(value) {
+  if (!Array.isArray(value)) return [];
+  const urls = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const raw = item.trim();
+    if (!raw) continue;
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      continue;
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
+    if (blockedImageHost(parsed.hostname)) continue;
+    urls.push(raw);
+    if (urls.length >= MAX_IMAGES) break;
+  }
+  return urls;
+}
+
+function sniffImageMime(buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8) return "image/jpeg";
+  if (buffer.length >= 8 && buffer[0] === 0x89 && buffer.toString("ascii", 1, 4) === "PNG") return "image/png";
+  if (buffer.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") {
+    return "image/webp";
+  }
+  if (buffer.length >= 6 && buffer.toString("ascii", 0, 3) === "GIF") return "image/gif";
+  return null;
+}
+
+async function downloadImage(url) {
+  const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`image ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) throw new Error("image size");
+  const header = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  const mime = header.startsWith("image/") ? header : sniffImageMime(buffer);
+  if (!mime) throw new Error("not an image");
+  return { buffer, mime };
+}
+
+async function loadImages(urls) {
+  const images = [];
+  for (const url of sanitizeImageUrls(urls)) {
+    try {
+      images.push(await downloadImage(url));
+    } catch (error) {
+      console.error("[whatsapp] image", error instanceof Error ? error.message : error);
+    }
+  }
+  return images;
+}
+
 function formatQueued(text, queueId) {
   const mark = `Queued as ${queueId}`;
   if (text.includes(mark)) return text;
@@ -170,15 +238,43 @@ async function enqueue(job) {
   });
 }
 
+async function pace() {
+  const wait = Math.max(0, SEND_GAP_MS - (Date.now() - lastSendAt));
+  if (wait) await sleep(wait);
+}
+
 async function deliver(job) {
   const jid = toJid();
   if (!jid) throw new Error("WhatsApp recipient is not set");
   if (!sock || connection !== "open") throw new Error("WhatsApp is not connected");
-  const wait = Math.max(0, SEND_GAP_MS - (Date.now() - lastSendAt));
-  if (wait) await sleep(wait);
-  const body = shouldStamp(job) ? formatQueued(job.text, job.queueId) : job.text;
-  await sock.sendMessage(jid, { text: body });
-  lastSendAt = Date.now();
+  const requested = sanitizeImageUrls(job.imageUrls);
+  const images = await loadImages(requested);
+  let body = shouldStamp(job) ? formatQueued(job.text, job.queueId) : job.text;
+  if (requested.length > 0 && images.length === 0) {
+    const links = requested.map((url, index) => `Receipt ${index + 1}: ${url}`).join("\n");
+    body = `${body}\n\n${links}`;
+  }
+  await pace();
+  if (images.length === 0) {
+    await sock.sendMessage(jid, { text: body });
+    lastSendAt = Date.now();
+  } else if (body.length <= CAPTION_MAX) {
+    await sock.sendMessage(jid, { image: images[0].buffer, caption: body, mimetype: images[0].mime });
+    lastSendAt = Date.now();
+    for (const image of images.slice(1)) {
+      await pace();
+      await sock.sendMessage(jid, { image: image.buffer, mimetype: image.mime });
+      lastSendAt = Date.now();
+    }
+  } else {
+    await sock.sendMessage(jid, { text: body });
+    lastSendAt = Date.now();
+    for (const image of images) {
+      await pace();
+      await sock.sendMessage(jid, { image: image.buffer, mimetype: image.mime });
+      lastSendAt = Date.now();
+    }
+  }
   await markOutbox(job.queueId, { status: "sent", sentAt: new Date(), lastError: "" });
   await markNotification(
     job.queueId,
@@ -250,6 +346,7 @@ async function reconcile() {
     await enqueue({
       queueId: doc.queueId,
       text: doc.text,
+      imageUrls: sanitizeImageUrls(doc.imageUrls),
       eventType: doc.eventType,
       createdAt: (doc.createdAt || new Date()).toISOString(),
       offlineAtEnqueue: Boolean(doc.offlineAtEnqueue) || connection !== "open",
@@ -378,6 +475,7 @@ app.post("/v1/jobs", requireAuth, async (req, res) => {
   const job = {
     queueId,
     text: text.slice(0, 4000),
+    imageUrls: sanitizeImageUrls(body.imageUrls),
     eventType: typeof body.eventType === "string" ? body.eventType : "whatsapp_text",
     createdAt: typeof body.createdAt === "string" ? body.createdAt : new Date().toISOString(),
     offlineAtEnqueue: Boolean(body.offlineAtEnqueue) || connection !== "open",

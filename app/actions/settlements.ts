@@ -7,7 +7,8 @@ import { isAdminSession } from "@/lib/admin";
 import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/audit-helper";
 import { createSettlementSchema, type CreateSettlementInput } from "@/lib/validation";
 import { sendSettlementNudgeEmail } from "@/lib/email";
-import { notifyTelegramSettlementRecorded, notifyTelegramText } from "@/lib/telegram-notify";
+import { notifyHousehold, notifyTelegramSettlementRecorded, notifyTelegramText } from "@/lib/telegram-notify";
+import { formatInr } from "@/lib/utils";
 import { appendAuditLog } from "@/services/audit-log";
 import { confirmSettlement, listSettlements, recordCompletedSettlement } from "@/services/settlements";
 import { getUserById } from "@/services/users";
@@ -91,6 +92,7 @@ export async function settleAction(
       parsed.data.fromUser,
       parsed.data.toUser,
       parsed.data.amount,
+      parsed.data.proofUrl,
     );
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
@@ -218,6 +220,16 @@ export async function confirmSettlementAction(input: {
     if (!data) return { ok: false, error: "Settlement not found or already confirmed" };
 
     const [fromUser, toUser] = await Promise.all([getUserById(data.fromUser), getUserById(data.toUser)]);
+    notifyHousehold({
+      heading: "Settlement confirmed",
+      title: `${fromUser?.name ?? "Someone"} paid ${toUser?.name ?? "someone"}`,
+      lines: [formatInr(data.amount), `Confirmed by ${session.user.name ?? "Someone"}`],
+      path: "/expenses",
+      icon: "🤝",
+      eventType: "telegram_settlement_confirmed",
+      dedupeKey: `settlement:${data._id}:confirmed`,
+      metadata: { settlementId: data._id },
+    });
     try {
       await appendAuditLog({
         actionType: "SETTLEMENT_CONFIRMED",

@@ -15,6 +15,7 @@ import {
   type UpdateReminderPreferencesInput,
   type UpdateUserInput,
 } from "@/lib/validation";
+import { notifyHousehold } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import {
   createUser,
@@ -82,6 +83,16 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionRe
     } catch (e) {
       console.error("[invite] failed to send invite email", e);
     }
+    notifyHousehold({
+      heading: "Roommate invited",
+      title: data.name,
+      lines: [`Invited by ${session.user.name ?? "Someone"}`],
+      path: "/users",
+      icon: "👋",
+      eventType: "telegram_user_created",
+      dedupeKey: `user:${data._id}:created`,
+      metadata: { userId: data._id },
+    });
     try {
       await appendAuditLog({
         actionType: "CREATE_USER",
@@ -152,6 +163,15 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionRe
     const before = await getUserById(parsed.data.id);
     const data = await updateUser(parsed.data);
     if (!data) return { ok: false, error: "User not found" };
+    notifyHousehold({
+      heading: "Roommate updated",
+      title: data.name,
+      lines: [`Updated by ${session.user.name ?? "Someone"}`],
+      path: "/users",
+      icon: "👋",
+      eventType: "telegram_user_updated",
+      metadata: { userId: data._id },
+    });
     try {
       await appendAuditLog({
         actionType: "UPDATE_USER",
@@ -208,6 +228,18 @@ export async function deleteUserAction(id: string): Promise<ActionResult<null>> 
     const before = await getUserById(id);
     const res = await deleteUser(id);
     if (!res.ok) return { ok: false, error: res.error ?? "Delete failed" };
+    if (before) {
+      notifyHousehold({
+        heading: "Roommate removed",
+        title: before.name,
+        lines: [`Removed by ${session.user.name ?? "Someone"}`],
+        path: "/users",
+        icon: "👋",
+        eventType: "telegram_user_deleted",
+        dedupeKey: `user:${id}:deleted`,
+        metadata: { userId: id },
+      });
+    }
     try {
       await appendAuditLog({
         actionType: "DELETE_USER",

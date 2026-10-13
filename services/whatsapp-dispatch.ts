@@ -3,6 +3,7 @@ import {
   createQueueId,
   htmlToPlain,
 } from "@/lib/whatsapp-queue";
+import { whatsappImageUrls } from "@/lib/whatsapp-images";
 import { WhatsAppOutbox } from "@/models/WhatsAppOutbox";
 import { appendNotificationEvent } from "@/services/notification-events";
 
@@ -44,12 +45,14 @@ async function recordWhatsApp(input: {
  */
 export async function dispatchWhatsApp(input: {
   text: string;
+  imageUrls?: string[];
   eventType: string;
   metadata?: Record<string, unknown> | null;
   dedupeKey?: string;
 }): Promise<void> {
   const text = input.text.trim();
   if (!text) return;
+  const imageUrls = whatsappImageUrls(input.imageUrls);
 
   const eventType = whatsappEventType(input.eventType);
   const metadata = { ...(input.metadata ?? {}) };
@@ -82,6 +85,7 @@ export async function dispatchWhatsApp(input: {
     await WhatsAppOutbox.create({
       queueId,
       text,
+      ...(imageUrls.length > 0 ? { imageUrls } : {}),
       eventType,
       dedupeKey: input.dedupeKey,
       status: "queued",
@@ -112,11 +116,12 @@ export async function dispatchWhatsApp(input: {
         body: JSON.stringify({
           queueId,
           text,
+          ...(imageUrls.length > 0 ? { imageUrls } : {}),
           eventType,
           createdAt: createdAt.toISOString(),
           offlineAtEnqueue: false,
         }),
-        signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
+        signal: AbortSignal.timeout(imageUrls.length > 0 ? 25_000 : GATEWAY_TIMEOUT_MS),
       });
 
       if (res.ok) {
@@ -173,12 +178,7 @@ export function plainTextForWhatsApp(input: {
   html?: string;
   plain?: string;
   captionHtml?: string;
-  imageUrl?: string;
 }): string {
   const ready = input.plain?.trim();
-  let text = ready || htmlToPlain(input.html || input.captionHtml || "");
-  if (input.imageUrl?.trim()) {
-    text = `${text}\n\nReceipt is in the app.`.trim();
-  }
-  return text;
+  return ready || htmlToPlain(input.html || input.captionHtml || "");
 }

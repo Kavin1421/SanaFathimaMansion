@@ -4,6 +4,7 @@ import { performerAnonymous, performerFromSession, toAuditJson } from "@/lib/aud
 import { requireAuthSession } from "@/lib/api-auth";
 import { isAdminSession } from "@/lib/admin";
 import { createUserSchema } from "@/lib/validation";
+import { notifyHousehold } from "@/lib/telegram-notify";
 import { createUser, listUsers } from "@/services/users";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
     const user = await createUser(parsed.data);
+    notifyHousehold({
+      heading: "Roommate invited",
+      title: user.name,
+      lines: [`Invited by ${session.user.name ?? "Someone"}`],
+      path: "/users",
+      icon: "👋",
+      eventType: "telegram_user_created",
+      dedupeKey: `user:${user._id}:created`,
+      metadata: { userId: user._id },
+    });
     return NextResponse.json(user);
   } catch (e) {
     console.error(e);

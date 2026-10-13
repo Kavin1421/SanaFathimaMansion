@@ -6,6 +6,7 @@ import {
   acknowledgeOverspendSchema,
   updateBudgetThresholdsSchema,
 } from "@/lib/validation";
+import { notifyHousehold } from "@/lib/telegram-notify";
 import { appendAuditLog } from "@/services/audit-log";
 import {
   acknowledgeOverspend,
@@ -65,6 +66,18 @@ export async function PATCH(req: Request) {
     } catch (e) {
       console.error("[audit] update thresholds", e);
     }
+    notifyHousehold({
+      heading: "Budget alerts updated",
+      title: "Monthly wallet",
+      lines: [`Warn at ${data.budgetThresholdWarn}%`, `Over at ${data.budgetThresholdOver}%`],
+      path: "/dashboard",
+      icon: "💳",
+      eventType: "telegram_budget_thresholds",
+      metadata: {
+        budgetThresholdWarn: data.budgetThresholdWarn,
+        budgetThresholdOver: data.budgetThresholdOver,
+      },
+    });
     return NextResponse.json(data);
   } catch (e) {
     console.error(e);
@@ -97,6 +110,16 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error("[audit] acknowledge overspend", e);
     }
+    notifyHousehold({
+      heading: "Overspend acknowledged",
+      title: parsed.data.monthKey,
+      lines: [`Acknowledged by ${session.user.name ?? "Someone"}`],
+      path: "/dashboard",
+      icon: "⚠️",
+      eventType: "telegram_overspend_acknowledged",
+      dedupeKey: `overspend:${parsed.data.monthKey}`,
+      metadata: { monthKey: parsed.data.monthKey },
+    });
     return NextResponse.json(data);
   } catch (e) {
     console.error(e);
