@@ -75,7 +75,7 @@ export async function createExpenseAction(
     } catch (e) {
       console.error("[audit] create expense", e);
     }
-    notifyTelegramExpense(data, data.status === "pending" ? "pending" : "created");
+    await notifyTelegramExpense(data, data.status === "pending" ? "pending" : "created");
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -150,9 +150,9 @@ export async function updateExpenseAction(
       console.error("[audit] update expense", e);
     }
     if (data.status === "pending") {
-      notifyTelegramExpense(data, "pending");
+      await notifyTelegramExpense(data, "pending");
     } else {
-      notifyTelegramExpense(data, "updated");
+      await notifyTelegramExpense(data, "updated");
     }
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
@@ -200,7 +200,7 @@ export async function deleteExpenseAction(id: string): Promise<ActionResult<null
     const ok = await deleteExpense(id);
     if (!ok) return { ok: false, error: "Expense not found" };
     if (before) {
-      notifyTelegramExpense(before, "deleted", { deletedByName: session.user.name ?? undefined });
+      await notifyTelegramExpense(before, "deleted", { deletedByName: session.user.name ?? undefined });
     }
     try {
       await appendAuditLog({
@@ -247,7 +247,7 @@ export async function addExpenseCommentAction(input: {
       text,
     });
     if (!data) return { ok: false, error: "Expense not found" };
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Comment added",
       title: data.title,
       lines: [`${session.user.name ?? "Someone"} wrote`, text],
@@ -328,7 +328,7 @@ export async function approveExpenseAction(
     } catch (e) {
       console.error("[audit] approve expense", e);
     }
-    notifyTelegramExpense(data, "approved", { approvedByName: session.user.name ?? undefined });
+    await notifyTelegramExpense(data, "approved", { approvedByName: session.user.name ?? undefined });
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -364,7 +364,7 @@ export async function rejectExpenseAction(
     } catch (e) {
       console.error("[audit] reject expense", e);
     }
-    notifyTelegramExpenseRejected(data, parsed.data.reason, session.user.name ?? undefined);
+    await notifyTelegramExpenseRejected(data, parsed.data.reason, session.user.name ?? undefined);
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -390,7 +390,7 @@ export async function undoExpenseAction(
     }
     const data = await undoExpense(id);
     if (!data) return { ok: false, error: "Expense not found" };
-    notifyTelegramExpense(before, "deleted", {
+    await notifyTelegramExpense(before, "deleted", {
       deletedByName: session.user.name ?? undefined,
       undone: true,
     });

@@ -565,8 +565,8 @@ export function notifyTelegramPreBillFinalized(
   dto: PreBillDTO,
   creatorName: string,
   finalizedDate: Date,
-): void {
-  void (async () => {
+): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();
@@ -600,8 +600,8 @@ export function notifyTelegramPreBillEdited(
   dto: PreBillDTO,
   editorName: string,
   editedDate: Date,
-): void {
-  void (async () => {
+): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();
@@ -633,8 +633,8 @@ export function notifyTelegramPreBillEdited(
 }
 
 /** When every line on a pre-bill is marked purchased. */
-export function notifyTelegramPreBillShoppingCompleted(title: string): void {
-  void (async () => {
+export function notifyTelegramPreBillShoppingCompleted(title: string): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();
@@ -672,10 +672,10 @@ export function notifyHousehold(input: {
   eventType: string;
   dedupeKey?: string;
   metadata?: Record<string, unknown> | null;
-}): void {
+}): Promise<void> {
   const title = input.title.trim();
-  if (!title) return;
-  void (async () => {
+  if (!title) return Promise.resolve();
+  return (async () => {
     try {
       await connectDb();
       const houseName = await getHouseDisplayName();
@@ -707,10 +707,10 @@ export function notifyHousehold(input: {
   })();
 }
 
-/** Fire-and-forget plain text (balance reminders, summaries). */
-export function notifyTelegramText(text: string): void {
-  if (!text.trim()) return;
-  void sendPipeline({
+/** Plain text for balance reminders and summaries. Callers must await this. */
+export function notifyTelegramText(text: string): Promise<void> {
+  if (!text.trim()) return Promise.resolve();
+  return sendPipeline({
     plain: text.trim(),
     eventType: "telegram_text",
   });
@@ -835,8 +835,8 @@ export function notifyTelegramExpense(
   dto: ExpenseDTO,
   mode: ExpenseNotifyMode = "created",
   extras?: { approvedByName?: string; deletedByName?: string; undone?: boolean },
-): void {
-  void (async () => {
+): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const resolvedMode = resolveExpenseNotifyMode(dto, mode);
@@ -868,8 +868,8 @@ export function notifyTelegramExpenseRejected(
   dto: ExpenseDTO,
   reason: string,
   rejectedByName?: string,
-): void {
-  void (async () => {
+): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();
@@ -932,8 +932,8 @@ export function notifyTelegramSettlementRecorded(
   toUserId: string,
   amount: number,
   proofUrl?: string,
-): void {
-  void (async () => {
+): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();
@@ -993,8 +993,8 @@ export function notifyTelegramMonthReset(
   monthKey: string,
   budget: number,
   options?: { carryForwardBalances?: boolean },
-): void {
-  void (async () => {
+): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();
@@ -1022,8 +1022,8 @@ export function notifyTelegramMonthReset(
 export function notifyTelegramWalletBudgetAmended(
   monthKey: string,
   amounts: { previousBudget: number; additionalAmount: number; budget: number },
-): void {
-  void (async () => {
+): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();
@@ -1048,8 +1048,8 @@ export function notifyTelegramWalletBudgetAmended(
   })();
 }
 
-export function notifyTelegramWalletBudgetUpdated(monthKey: string, budget: number): void {
-  void (async () => {
+export function notifyTelegramWalletBudgetUpdated(monthKey: string, budget: number): Promise<void> {
+  return (async () => {
     try {
       await connectDb();
       const appName = await getHouseDisplayName();

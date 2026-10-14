@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       ...parsed.data,
       createdBy: session.user.id,
     });
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Savings goal added",
       title: goal.title,
       lines: [`${formatInr(goal.currentAmount)} of ${formatInr(goal.targetAmount)}`],

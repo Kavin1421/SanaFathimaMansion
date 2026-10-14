@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       console.error("[audit] recurring posted", e);
     }
     const expense = await getExpenseById(result.expenseId);
-    if (expense) notifyTelegramExpense(expense, "created");
+    if (expense) await notifyTelegramExpense(expense, "created");
     return NextResponse.json(result);
   } catch (e) {
     console.error(e);

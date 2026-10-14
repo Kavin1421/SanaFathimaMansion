@@ -40,7 +40,7 @@ export async function createRecurringExpenseAction(
       ...parsed.data,
       createdBy: session.user.id,
     });
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Recurring expense added",
       title: data.title,
       lines: [formatInr(data.amount), data.category, `Day ${data.dayOfMonth} of each month`],
@@ -75,7 +75,7 @@ export async function updateRecurringExpenseAction(input: {
   try {
     const data = await updateRecurringExpense(input);
     if (!data) return { ok: false, error: "Recurring expense not found" };
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Recurring expense updated",
       title: data.title,
       lines: [
@@ -105,7 +105,7 @@ export async function deleteRecurringExpenseAction(id: string): Promise<ActionRe
     const ok = await deleteRecurringExpense(id);
     if (!ok) return { ok: false, error: "Recurring expense not found" };
     if (before) {
-      notifyHousehold({
+      await notifyHousehold({
         heading: "Recurring expense removed",
         title: before.title,
         lines: [formatInr(before.amount), `Removed by ${session.user.name ?? "Someone"}`],
@@ -148,7 +148,7 @@ export async function postRecurringExpenseAction(input: {
     }
     const expense = await getExpenseById(result.expenseId);
     if (expense) {
-      notifyTelegramExpense(expense, "created");
+      await notifyTelegramExpense(expense, "created");
     }
     revalidatePath("/dashboard");
     revalidatePath("/expenses");

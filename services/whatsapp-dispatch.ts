@@ -121,7 +121,7 @@ export async function dispatchWhatsApp(input: {
           createdAt: createdAt.toISOString(),
           offlineAtEnqueue: false,
         }),
-        signal: AbortSignal.timeout(imageUrls.length > 0 ? 25_000 : GATEWAY_TIMEOUT_MS),
+        signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
       });
 
       if (res.ok) {

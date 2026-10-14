@@ -72,7 +72,7 @@ export async function setMonthBudgetAction(
     } catch (e) {
       console.error("[audit] update budget", e);
     }
-    notifyTelegramWalletBudgetUpdated(monthKey, budget);
+    await notifyTelegramWalletBudgetUpdated(monthKey, budget);
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -147,7 +147,7 @@ export async function amendMonthBudgetAction(
     } catch (e) {
       console.error("[audit] amend budget", e);
     }
-    notifyTelegramWalletBudgetAmended(monthKey, { previousBudget, additionalAmount, budget });
+    await notifyTelegramWalletBudgetAmended(monthKey, { previousBudget, additionalAmount, budget });
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -235,7 +235,7 @@ export async function startNewMonthAction(
     } catch (e) {
       console.error("[audit] reset month", e);
     }
-    notifyTelegramMonthReset(next, nextBudget, { carryForwardBalances });
+    await notifyTelegramMonthReset(next, nextBudget, { carryForwardBalances });
     revalidatePath("/dashboard");
     revalidatePath("/expenses");
     revalidatePath("/audit-logs");
@@ -284,7 +284,7 @@ export async function updateBudgetThresholdsAction(
     } catch (e) {
       console.error("[audit] update thresholds", e);
     }
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Budget alerts updated",
       title: "Monthly wallet",
       lines: [`Warn at ${data.budgetThresholdWarn}%`, `Over at ${data.budgetThresholdOver}%`],
@@ -324,7 +324,7 @@ export async function acknowledgeOverspendAction(
     } catch (e) {
       console.error("[audit] acknowledge overspend", e);
     }
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Overspend acknowledged",
       title: parsed.data.monthKey,
       lines: [`Acknowledged by ${session.user.name ?? "Someone"}`],

@@ -30,7 +30,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     if (!data) {
       return NextResponse.json({ error: "Savings goal not found" }, { status: 404 });
     }
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Savings contribution",
       title: data.title,
       lines: [

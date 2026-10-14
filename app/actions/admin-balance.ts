@@ -60,7 +60,7 @@ export async function adminOverrideBalanceAction(
     }
     const r = await User.findByIdAndUpdate(userId, patch);
     if (!r) return { ok: false, error: "User not found" };
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Balance adjusted",
       title: before?.name ?? "Roommate",
       lines: [

@@ -61,7 +61,7 @@ export async function createPreBillAction(
   }
   try {
     const data = await createPreBill(parsed.data, ctx.ledgerUserId);
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Pre-bill created",
       title: data.title,
       lines: [`${data.items.length} item${data.items.length === 1 ? "" : "s"}`],
@@ -147,7 +147,7 @@ export async function notifyFinalizedPreBillTelegramAction(
       ctx.session.user?.name?.trim() ||
       ctx.session.user?.email?.trim() ||
       "Someone";
-    notifyTelegramPreBillEdited(data, editorName, new Date());
+    await notifyTelegramPreBillEdited(data, editorName, new Date());
     return { ok: true, data: { sent: true } };
   } catch (e) {
     console.error(e);
@@ -191,7 +191,7 @@ export async function finalizePreBillAction(
 
     const creator = await User.findById(data.createdBy).select("name").lean();
     const creatorName = creator?.name ?? "Someone";
-    notifyTelegramPreBillFinalized(data, creatorName, new Date(data.updatedAt));
+    await notifyTelegramPreBillFinalized(data, creatorName, new Date(data.updatedAt));
 
     try {
       await appendAuditLog({
@@ -230,7 +230,7 @@ export async function deletePreBillAction(
     if (!ok) return { ok: false, error: "Pre-bill not found" };
     if (existing) {
       const actor = ctx.session.user?.name?.trim() || "Someone";
-      notifyHousehold({
+      await notifyHousehold({
         heading: "Pre-bill removed",
         title: existing.title,
         lines: [`Removed by ${actor}`],
@@ -269,7 +269,7 @@ export async function duplicatePreBillAction(
   try {
     const data = await duplicatePreBill(parsed.data.id, ctx.ledgerUserId);
     if (!data) return { ok: false, error: "Pre-bill not found" };
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Pre-bill copied",
       title: data.title,
       lines: [`${data.items.length} item${data.items.length === 1 ? "" : "s"}`],

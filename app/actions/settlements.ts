@@ -87,7 +87,7 @@ export async function settleAction(
     } catch (e) {
       console.error("[audit] create settlement", e);
     }
-    notifyTelegramSettlementRecorded(
+    await notifyTelegramSettlementRecorded(
       data._id,
       parsed.data.fromUser,
       parsed.data.toUser,
@@ -155,7 +155,7 @@ export async function sendSettlementNudgeAction(input: {
           : `Hi ${fromUser.name}, friendly reminder to settle ₹${amount.toLocaleString("en-IN")} to ${toUser.name} when possible.`;
 
     if (input.channels.telegram) {
-      notifyTelegramText(`🔔 Settlement nudge\n${baseMessage}`);
+      await notifyTelegramText(`🔔 Settlement nudge\n${baseMessage}`);
     }
     if (input.channels.email) {
       await sendSettlementNudgeEmail({
@@ -220,7 +220,7 @@ export async function confirmSettlementAction(input: {
     if (!data) return { ok: false, error: "Settlement not found or already confirmed" };
 
     const [fromUser, toUser] = await Promise.all([getUserById(data.fromUser), getUserById(data.toUser)]);
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Settlement confirmed",
       title: `${fromUser?.name ?? "Someone"} paid ${toUser?.name ?? "someone"}`,
       lines: [formatInr(data.amount), `Confirmed by ${session.user.name ?? "Someone"}`],

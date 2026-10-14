@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
     const user = await createUser(parsed.data);
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Roommate invited",
       title: user.name,
       lines: [`Invited by ${session.user.name ?? "Someone"}`],

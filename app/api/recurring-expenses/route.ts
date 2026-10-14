@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       ...parsed.data,
       createdBy: session.user.id,
     });
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Recurring expense added",
       title: data.title,
       lines: [formatInr(data.amount), data.category, `Day ${data.dayOfMonth} of each month`],

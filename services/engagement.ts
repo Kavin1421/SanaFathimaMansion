@@ -57,7 +57,7 @@ export async function runDailyBalanceReminders(now = new Date()): Promise<{ remi
   }
 
   if (telegramReminderLines.length > 0) {
-    notifyTelegramText(
+    await notifyTelegramText(
       `📌 Daily balance reminder\n${telegramReminderLines.join("\n")}\n\nPlease settle and mark as settled in app.`,
     );
   }
@@ -90,7 +90,7 @@ export async function runMonthlySummaryBroadcast(now = new Date()): Promise<{ se
     sent += 1;
   }
 
-  notifyTelegramText(
+  await notifyTelegramText(
     `📊 ${summary.monthLabel} summary\nTotal: ₹${summary.totalSpent.toLocaleString("en-IN")}\nTop spender: ${summary.monthlyWinner?.name ?? "N/A"}\nRemaining balance: ${summary.monthRemaining == null ? "N/A" : `₹${summary.monthRemaining.toLocaleString("en-IN")}`}`,
   );
 

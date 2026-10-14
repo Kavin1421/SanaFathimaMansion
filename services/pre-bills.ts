@@ -291,7 +291,7 @@ export async function setPreBillItemPurchased(
   const nowAllPurchased =
     dto.items.length > 0 && dto.items.every((it) => it.isPurchased === true);
   if (nowAllPurchased && !wasAllPurchased) {
-    notifyTelegramPreBillShoppingCompleted(dto.title);
+    await notifyTelegramPreBillShoppingCompleted(dto.title);
   }
 
   return dto;

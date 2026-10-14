@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error("[audit] update house", e);
     }
-    notifyHousehold({
+    await notifyHousehold({
       heading: "House name updated",
       title: parsed.data.displayName,
       lines: [`Updated by ${session.user.name ?? "Someone"}`],

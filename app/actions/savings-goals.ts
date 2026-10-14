@@ -42,7 +42,7 @@ export async function createSavingsGoalAction(
       ...parsed.data,
       createdBy: session.user.id,
     });
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Savings goal added",
       title: data.title,
       lines: [`${formatInr(data.currentAmount)} of ${formatInr(data.targetAmount)}`],
@@ -71,7 +71,7 @@ export async function contributeSavingsGoalAction(
   try {
     const data = await contributeSavingsGoal(parsed.data.id, parsed.data.amount);
     if (!data) return { ok: false, error: "Savings goal not found" };
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Savings contribution",
       title: data.title,
       lines: [
@@ -112,7 +112,7 @@ export async function updateSavingsGoalAction(input: {
   try {
     const data = await updateSavingsGoal(input);
     if (!data) return { ok: false, error: "Savings goal not found" };
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Savings goal updated",
       title: data.title,
       lines: [
@@ -139,7 +139,7 @@ export async function deleteSavingsGoalAction(id: string): Promise<ActionResult<
     const ok = await deleteSavingsGoal(id);
     if (!ok) return { ok: false, error: "Savings goal not found" };
     if (before) {
-      notifyHousehold({
+      await notifyHousehold({
         heading: "Savings goal removed",
         title: before.title,
         lines: [`Removed by ${session.user.name ?? "Someone"}`],

@@ -66,7 +66,7 @@ export async function PATCH(req: Request) {
     } catch (e) {
       console.error("[audit] update thresholds", e);
     }
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Budget alerts updated",
       title: "Monthly wallet",
       lines: [`Warn at ${data.budgetThresholdWarn}%`, `Over at ${data.budgetThresholdOver}%`],
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error("[audit] acknowledge overspend", e);
     }
-    notifyHousehold({
+    await notifyHousehold({
       heading: "Overspend acknowledged",
       title: parsed.data.monthKey,
       lines: [`Acknowledged by ${session.user.name ?? "Someone"}`],
