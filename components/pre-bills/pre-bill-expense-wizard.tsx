@@ -25,7 +25,7 @@ import {
 import { createExpenseAction } from "@/app/actions/expenses";
 import { roundMoney } from "@/lib/ledger";
 import { queryKeys } from "@/lib/query-keys";
-import { formatInr } from "@/lib/utils";
+import { cn, formatInr } from "@/lib/utils";
 import type { ExpenseCategory, ExpenseDTO, PreBillDTO, UserDTO } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
@@ -64,7 +64,7 @@ export function PreBillExpenseWizard({
   const [step, setStep] = useState(0);
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState("");
-  const [splitEnabled, setSplitEnabled] = useState(true);
+  const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitMode, setSplitMode] = useState<"equal" | "custom">("equal");
   const [splitIds, setSplitIds] = useState<Set<string>>(new Set());
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -87,7 +87,7 @@ export function PreBillExpenseWizard({
         ? String(preBillSeed.suggestedAmount)
         : "",
     );
-    setSplitEnabled(true);
+    setSplitEnabled(false);
     setSplitMode("equal");
     setSplitIds(new Set(users.map((u) => u._id)));
     setPreviewOpen(false);
@@ -152,7 +152,7 @@ export function PreBillExpenseWizard({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-lg">
+        <DialogContent className="max-h-[min(90dvh,100dvh)] w-[min(32rem,calc(100vw-1.5rem))] overflow-x-hidden overflow-y-auto rounded-2xl sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Book as expense — {preBillSeed.title}</DialogTitle>
           </DialogHeader>
@@ -199,15 +199,29 @@ export function PreBillExpenseWizard({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-3 py-3">
-                <div>
+              <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 px-3 py-3">
+                <div className="min-w-0">
                   <p className="text-sm font-medium">Split expense (IOU)</p>
                   <p className="text-xs text-muted-foreground">Off = house expense only</p>
                 </div>
-                <Checkbox
-                  checked={splitEnabled}
-                  onCheckedChange={(c) => setSplitEnabled(c === true)}
-                />
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={splitEnabled}
+                  aria-label="Split expense"
+                  onClick={() => setSplitEnabled(!splitEnabled)}
+                  className={cn(
+                    "relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    splitEnabled ? "bg-primary" : "bg-muted-foreground/25",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-0.5 h-6 w-6 rounded-full bg-background shadow transition-transform",
+                      splitEnabled ? "translate-x-5" : "translate-x-0.5",
+                    )}
+                  />
+                </button>
               </div>
               {splitEnabled ? (
                 <div className="space-y-2">
@@ -296,6 +310,8 @@ export function PreBillExpenseWizard({
         title="Expense recorded"
         amount={addedExpense ? formatInr(addedExpense.amount) : undefined}
         subtitle={addedExpense?.title}
+        autoCloseMs={0}
+        primaryAction={{ label: "Done" }}
       />
     </>
   );

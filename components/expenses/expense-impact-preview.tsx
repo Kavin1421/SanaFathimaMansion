@@ -72,7 +72,7 @@ export function ExpenseImpactPreview({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-lg">
+      <DialogContent className="max-h-[min(90dvh,100dvh)] w-[min(32rem,calc(100vw-1.5rem))] overflow-x-hidden overflow-y-auto rounded-2xl sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -154,11 +154,11 @@ export function ExpenseImpactPreview({
             )}
           </div>
         )}
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button
             type="button"
             variant="outline"
-            className="rounded-xl"
+            className="h-11 w-full rounded-xl sm:w-auto"
             disabled={busy}
             onClick={() => onOpenChange(false)}
           >
@@ -166,7 +166,7 @@ export function ExpenseImpactPreview({
           </Button>
           <Button
             type="button"
-            className="rounded-xl"
+            className="h-11 w-full rounded-xl sm:w-auto"
             disabled={busy || !preview || Boolean(errorMessage)}
             onClick={onConfirm}
           >

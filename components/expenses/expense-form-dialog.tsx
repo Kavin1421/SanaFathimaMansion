@@ -125,7 +125,7 @@ function FormFields({
   onRemoveImage: (index: number) => void;
 }) {
   return (
-    <div className="grid gap-4 py-2">
+    <div className="grid min-w-0 gap-4 py-2">
       <div className="space-y-2">
         <Label htmlFor="title">Title</Label>
         <Input
@@ -162,7 +162,7 @@ function FormFields({
             step="1"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="rounded-xl text-2xl font-semibold md:text-3xl"
+            className="h-12 w-full min-w-0 rounded-xl text-2xl font-semibold md:h-14 md:text-3xl"
           />
         </div>
       ) : (
@@ -176,7 +176,7 @@ function FormFields({
             step="0.01"
             value={originalAmount}
             onChange={(e) => setOriginalAmount(e.target.value)}
-            className="rounded-xl text-2xl font-semibold md:text-3xl"
+            className="h-12 w-full min-w-0 rounded-xl text-2xl font-semibold md:h-14 md:text-3xl"
           />
           {originalAmount && Number(originalAmount) > 0 ? (
             <p className="text-xs text-muted-foreground">
@@ -187,14 +187,14 @@ function FormFields({
       )}
       <div className="space-y-2">
         <Label>Category</Label>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
           {EXPENSE_CATEGORIES.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setCategory(c)}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-center text-xs font-medium transition-all hover:bg-muted/80",
+                "flex min-h-[4.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center text-xs font-medium transition-all hover:bg-muted/80",
                 category === c
                   ? "border-primary bg-primary/10 ring-2 ring-primary/30"
                   : "border-border bg-card",
@@ -221,27 +221,40 @@ function FormFields({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-3 py-3">
-        <div>
+      <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 px-3 py-3">
+        <div className="min-w-0">
           <p className="text-sm font-medium">Split expense (IOU)</p>
           <p className="text-xs text-muted-foreground">
             Off = house expense (wallet only, no balance split)
           </p>
         </div>
-        <Checkbox
-          checked={splitEnabled}
-          onCheckedChange={(c) => setSplitEnabled(c === true)}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={splitEnabled}
           aria-label="Split expense"
-        />
+          onClick={() => setSplitEnabled(!splitEnabled)}
+          className={cn(
+            "relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            splitEnabled ? "bg-primary" : "bg-muted-foreground/25",
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 h-6 w-6 rounded-full bg-background shadow transition-transform",
+              splitEnabled ? "translate-x-5" : "translate-x-0.5",
+            )}
+          />
+        </button>
       </div>
       {splitEnabled ? (
         <div className="space-y-3">
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
               size="sm"
               variant={splitMode === "equal" ? "default" : "outline"}
-              className="rounded-xl"
+              className="h-10 w-full rounded-xl"
               onClick={() => setSplitMode("equal")}
             >
               Equal split
@@ -250,7 +263,7 @@ function FormFields({
               type="button"
               size="sm"
               variant={splitMode === "custom" ? "default" : "outline"}
-              className="rounded-xl"
+              className="h-10 w-full rounded-xl"
               onClick={() => setSplitMode("custom")}
             >
               Custom amounts
@@ -305,7 +318,7 @@ function FormFields({
           type="date"
           value={dateStr}
           onChange={(e) => setDateStr(e.target.value)}
-          className="rounded-xl"
+          className="h-11 w-full min-w-0 max-w-full rounded-xl"
         />
       </div>
       {category === "Others" ? (
@@ -337,7 +350,7 @@ function FormFields({
           type="file"
           accept="image/*"
           multiple
-          className="rounded-xl"
+          className="h-auto min-h-11 w-full min-w-0 max-w-full rounded-xl py-2 text-sm file:mr-3 file:rounded-lg file:bg-muted file:px-3 file:py-1.5"
           disabled={uploading || billImages.length >= MAX_EXPENSE_BILL_IMAGES}
           onChange={(e) => {
             onUploadFiles(e.target.files);
@@ -397,7 +410,7 @@ export function ExpenseFormDialog({
   const [previewBalances, setPreviewBalances] = useState<Record<string, number>>({});
   const [category, setCategory] = useState<string>("Groceries");
   const [paidBy, setPaidBy] = useState<string>("");
-  const [splitEnabled, setSplitEnabled] = useState(true);
+  const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitMode, setSplitMode] = useState<"equal" | "custom">("equal");
   const [splitIds, setSplitIds] = useState<Set<string>>(new Set());
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
@@ -471,7 +484,7 @@ export function ExpenseFormDialog({
         );
         setCategory(preBillSeed.category);
         setPaidBy(payerDefault);
-        setSplitEnabled(true);
+        setSplitEnabled(false);
         setSplitMode("equal");
         setSplitIds(new Set(users.map((u) => u._id)));
         setCustomAmounts({});
@@ -493,7 +506,7 @@ export function ExpenseFormDialog({
         setOriginalAmount("");
         setCategory("Groceries");
         setPaidBy(payerDefault);
-        setSplitEnabled(true);
+        setSplitEnabled(false);
         setSplitMode("equal");
         setSplitIds(new Set(users.map((u) => u._id)));
         setCustomAmounts({});
@@ -746,11 +759,11 @@ export function ExpenseFormDialog({
     onRemoveImage: (index: number) => setBillImages((prev) => prev.filter((_, i) => i !== index)),
   };
 
-  const footer = (
-    <motion.div whileTap={reduceMotion ? undefined : { scale: 0.98 }}>
+  const saveButton = (fullWidth: boolean) => (
+    <motion.div whileTap={reduceMotion ? undefined : { scale: 0.98 }} className={fullWidth ? "w-full" : undefined}>
       <Button
         type="button"
-        className="w-full rounded-xl sm:w-auto"
+        className={cn("h-11 rounded-xl", fullWidth ? "w-full" : "w-full sm:w-auto")}
         disabled={mut.isPending || uploading}
         onClick={() => void openPreview()}
       >
@@ -760,9 +773,7 @@ export function ExpenseFormDialog({
     </motion.div>
   );
 
-  const [desktop, setDesktop] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true,
-  );
+  const [desktop, setDesktop] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     setDesktop(mq.matches);
@@ -791,6 +802,8 @@ export function ExpenseFormDialog({
       title="Expense recorded"
       amount={addedExpense ? formatInr(addedExpense.amount) : undefined}
       subtitle={addedExpense?.title}
+      autoCloseMs={0}
+      primaryAction={{ label: "Done" }}
       action={
         addedExpense
           ? {
@@ -817,12 +830,12 @@ export function ExpenseFormDialog({
     return (
       <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-lg">
+          <DialogContent className="max-h-[min(90vh,100dvh)] w-[min(32rem,calc(100vw-1.5rem))] overflow-y-auto overflow-x-hidden rounded-2xl sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>{expense ? "Edit expense" : "New expense"}</DialogTitle>
             </DialogHeader>
             <FormFields {...formProps} />
-            <DialogFooter>{footer}</DialogFooter>
+            <DialogFooter>{saveButton(false)}</DialogFooter>
           </DialogContent>
         </Dialog>
         {previewDialog}
@@ -834,14 +847,19 @@ export function ExpenseFormDialog({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="flex max-h-[92vh] flex-col rounded-t-2xl p-4">
-          <SheetHeader className="text-left">
+        <SheetContent
+          side="bottom"
+          className="flex h-[100dvh] max-h-[100dvh] w-full flex-col gap-0 overflow-hidden rounded-none border-x-0 p-0"
+        >
+          <SheetHeader className="shrink-0 space-y-0 px-4 pb-3 pr-14 pt-[max(1rem,env(safe-area-inset-top))] text-left">
             <SheetTitle>{expense ? "Edit expense" : "New expense"}</SheetTitle>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4">
             <FormFields {...formProps} />
           </div>
-          <div className="border-t pt-4">{footer}</div>
+          <div className="shrink-0 border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+            {saveButton(true)}
+          </div>
         </SheetContent>
       </Sheet>
       {previewDialog}
